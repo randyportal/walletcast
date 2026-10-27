@@ -1,10 +1,10 @@
 import { PKPass } from "passkit-generator";
 import type { AppleConfig } from "@/lib/config/env";
 import type { Card, Subscriber } from "@/lib/db/schema";
-import { generateDefaultIcon, LOGO_MASTER, resizePng } from "@/lib/cards/images";
-import { publicCardUrl } from "@/lib/cards/links";
+import { LOGO_MASTER, renderCardIcon, renderCardStrips, resizePng } from "@/lib/cards/images";
+import { cardUsesHero } from "@/lib/cards/design";
+import { APPLE_BARCODE_FORMATS, resolveBarcode } from "@/lib/cards/barcode";
 import { glowSlot, slotHue } from "@/lib/glow/hue";
-import { renderStrips } from "@/lib/glow/strip";
 
 export const APPLE_WEB_SERVICE_PATH = "/api/apple";
 export const LATEST_FIELD_KEY = "latest";
@@ -20,7 +20,7 @@ function hexToRgb(hex: string): string {
 }
 
 async function imageBuffers(card: Card): Promise<Record<string, Buffer>> {
-  const icon = card.icon ?? (await generateDefaultIcon(card.name, card.bgColor, card.fgColor));
+  const icon = await renderCardIcon(card);
   const files: Record<string, Buffer> = {
     "icon.png": await resizePng(icon, 29, 29, "cover"),
     "icon@2x.png": await resizePng(icon, 58, 58, "cover"),
@@ -54,8 +54,9 @@ export async function buildApplePass({
   timeZone = "Europe/Rome",
   now = new Date(),
 }: BuildApplePassArgs): Promise<Buffer> {
-  // A store card is the style that shows a full-width strip behind the name.
-  const style = card.dayGlow ? "storeCard" : "generic";
+  const hero = cardUsesHero(card);
+  const style = hero ? "storeCard" : "generic";
+  const barcode = resolveBarcode(card, baseUrl);
   const passJson = {
     formatVersion: 1,
     passTypeIdentifier: apple.passTypeId,
@@ -71,19 +72,20 @@ export async function buildApplePass({
     labelColor: hexToRgb(card.labelColor),
     sharingProhibited: false,
     [style]: {},
-    ...(card.barcode
+    ...(barcode
       ? {
           barcodes: [
             {
-              format: "PKBarcodeFormatQR",
-              message: publicCardUrl(baseUrl, card.slug, "pass"),
+              format: APPLE_BARCODE_FORMATS[barcode.format],
+              message: barcode.value,
               messageEncoding: "iso-8859-1",
             },
           ],
         }
       : {}),
   };
-  const strips = card.dayGlow ? await renderStrips(slotHue(glowSlot(now, timeZone)), card.bgColor) : {};
+  const hue = slotHue(glowSlot(now, timeZone));
+  const strips = hero ? await renderCardStrips(card, hue) : {};
 
   const pass = new PKPass(
     { "pass.json": Buffer.from(JSON.stringify(passJson)), ...(await imageBuffers(card)), ...strips },
@@ -103,16 +105,21 @@ export async function buildApplePass({
     key: LATEST_FIELD_KEY,
     label: card.latestLabel,
     value: latestMessageText(card),
-    // Wallet shows a lock-screen notification when this value changes.
     changeMessage: "%@",
   });
+  for (const field of card.customFields.filter((f) => f.location === "front").slice(0, 4)) {
+    pass.auxiliaryFields.push({ key: `cf_${field.id}`, label: field.label.toUpperCase(), value: field.value });
+  }
 
   const back = [
     { key: "latest_back", label: "Latest message", value: latestMessageText(card) },
     card.description && { key: "about", label: "About", value: card.description },
     card.websiteUrl && { key: "website", label: "Website", value: card.websiteUrl },
     card.contactUrl && { key: "contact", label: "Save contact", value: card.contactUrl },
-    { key: "powered", label: "Powered by", value: "WalletCast, open-source wallet notifications" },
+    ...card.links.map((link) => ({ key: `link_${link.id}`, label: link.label, value: link.url })),
+    ...card.customFields
+      .filter((f) => f.location === "back")
+      .map((field) => ({ key: `cf_${field.id}`, label: field.label, value: field.value })),
   ].filter(Boolean) as { key: string; label: string; value: string }[];
   pass.backFields.push(...back);
 

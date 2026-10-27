@@ -1,44 +1,47 @@
-import { createHash, timingSafeEqual } from "node:crypto";
 import { jwtVerify, SignJWT } from "jose";
-
-/**
- * Single-admin auth: one password from ADMIN_PASSWORD, a signed JWT in an
- * httpOnly cookie. Framework-free so it can be tested and used from the proxy.
- */
 
 export const SESSION_COOKIE = "wc_session";
 export const SESSION_TTL_SECONDS = 7 * 24 * 3600;
-const AUDIENCE = "walletcast-admin";
+const AUDIENCE = "walletcast-session";
+
+export type UserRole = "admin" | "marketing";
+
+export interface SessionUser {
+  id: string;
+  username: string;
+  name: string;
+  role: UserRole;
+}
 
 function key(secret: string): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
-/** Constant-time compare that does not leak the password length. */
-export function checkPassword(candidate: string, expected: string | null): boolean {
-  if (!expected || !candidate) return false;
-  const a = createHash("sha256").update(candidate).digest();
-  const b = createHash("sha256").update(expected).digest();
-  return timingSafeEqual(a, b);
-}
-
-export async function createSessionToken(secret: string, now = new Date()): Promise<string> {
+export async function createSessionToken(secret: string, user: SessionUser, now = new Date()): Promise<string> {
   const iat = Math.floor(now.getTime() / 1000);
-  return new SignJWT({ role: "admin" })
+  return new SignJWT({ username: user.username, name: user.name, role: user.role })
     .setProtectedHeader({ alg: "HS256" })
+    .setSubject(user.id)
     .setAudience(AUDIENCE)
     .setIssuedAt(iat)
     .setExpirationTime(iat + SESSION_TTL_SECONDS)
     .sign(key(secret));
 }
 
-export async function verifySessionToken(token: string | undefined, secret: string | null): Promise<boolean> {
-  if (!token || !secret) return false;
+export async function verifySessionToken(token: string | undefined, secret: string | null): Promise<SessionUser | null> {
+  if (!token || !secret) return null;
   try {
     const { payload } = await jwtVerify(token, key(secret), { audience: AUDIENCE, algorithms: ["HS256"] });
-    return payload.role === "admin";
+    const role = payload.role === "admin" || payload.role === "marketing" ? payload.role : null;
+    if (!payload.sub || !role) return null;
+    return {
+      id: payload.sub,
+      username: typeof payload.username === "string" ? payload.username : "",
+      name: typeof payload.name === "string" ? payload.name : "",
+      role,
+    };
   } catch {
-    return false;
+    return null;
   }
 }
 

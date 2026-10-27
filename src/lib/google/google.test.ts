@@ -35,10 +35,38 @@ const card = {
   bgColor: "#111827",
   fgColor: "#ffffff",
   labelColor: "#9ca3af",
+  accentColor: "#4f46e5",
+  backgroundType: "solid",
+  bgColor2: null,
+  gradientAngle: 135,
+  backgroundImage: null,
+  backgroundOverlay: 35,
+  backgroundOverlayColor: "#000000",
+  backgroundPosition: "center",
+  fontFamily: "sans",
+  iconSource: "auto",
+  iconPreset: "",
+  iconShape: "rounded",
+  monogramText: "",
+  favicon: null,
+  links: [] as { id: string; label: string; url: string; icon: string; style: string }[],
+  customFields: [] as { id: string; label: string; value: string; location: string }[],
+  barcodeType: "qr",
+  barcodeContent: "link",
+  barcodeValue: null,
   logo: null,
   icon: null,
   latestMessage: null,
   latestMessageAt: null,
+  dayGlow: false,
+  glowSlot: null,
+  contactUrl: null,
+  logoText: "",
+  headerLabel: "",
+  headerValue: "",
+  nameLabel: "",
+  latestLabel: "LATEST",
+  barcode: false,
   createdAt: new Date(0),
   updatedAt: new Date(1000),
 } as Card;
@@ -82,6 +110,27 @@ describe("google object mapping", () => {
       body: "There",
       messageType: "TEXT_AND_NOTIFY",
     });
+  });
+
+  it("adds a hero image, links and custom fields", () => {
+    const patch = buildObjectPatch(
+      {
+        ...card,
+        backgroundType: "linear",
+        links: [{ id: "l1", label: "Menu", url: "https://menu.example", icon: "bag", style: "primary" }],
+        customFields: [{ id: "f1", label: "Phone", value: "555 0100", location: "back" }],
+      },
+      "https://wc.test",
+    );
+    expect(patch.heroImage!.sourceUri.uri).toBe(`https://wc.test/api/cards/${card.id}/image/hero?v=1000`);
+    expect(patch.linksModuleData.uris.map((u: { description: string }) => u.description)).toContain("Menu");
+    expect(patch.textModulesData).toContainEqual({ id: "cf_f1", header: "Phone", body: "555 0100" });
+  });
+
+  it("maps barcode types to Google formats", () => {
+    expect(buildObjectPatch({ ...card, barcode: true, barcodeType: "pdf417" }, "https://wc.test").barcode!.type).toBe("PDF_417");
+    expect(buildObjectPatch({ ...card, barcode: true, barcodeType: "aztec" }, "https://wc.test").barcode!.type).toBe("AZTEC");
+    expect(buildObjectPatch({ ...card, barcode: true, barcodeType: "code128", barcodeContent: "custom", barcodeValue: "HELLO" }, "https://wc.test").barcode).toEqual({ type: "CODE_128", value: "HELLO" });
   });
 });
 

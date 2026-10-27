@@ -69,7 +69,7 @@ Send a message and it appears on every customer's lock screen, on iPhone and And
 <td width="50%" valign="top">
 
 ### 🎨 Your brand, live
-Choose colours, logo, icon and text, and watch the card update as you type.
+Choose colours, logo, icon and text, and watch the card update as you type. Add gradients or a background image, pick a font and accent colour, use preset icons or a monogram, attach a per-card favicon, and add action buttons and custom fields — all with a live preview.
 
 </td>
 </tr>
@@ -91,7 +91,7 @@ Download PNG or SVG codes tagged by placement (`window`, `flyer`, `receipt`…) 
 <td valign="top">
 
 ### 📊 Delivery you can see
-Subscriber counts per wallet, full message history, and delivery stats for every send.
+Subscriber counts per wallet, full message history (with who sent each one), and delivery stats for every send.
 
 </td>
 <td valign="top">
@@ -141,6 +141,15 @@ A **hosted WalletCast** is in the works. You sign up, design your card and start
 <br/>
 
 ## Get started
+
+### Users & roles
+
+WalletCast supports two roles:
+
+- **Admin** — do everything: create and design cards, share, export subscribers, change settings and manage users.
+- **Marketing** — only send notifications to any card, from a simplified dashboard.
+
+On the first sign-in, the bootstrap admin is created from `ADMIN_USERNAME` (default `admin`) and `ADMIN_PASSWORD`. Sign in with that username and password, then add Marketing users from the **Users** page.
 
 ### What you need
 

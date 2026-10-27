@@ -1,9 +1,18 @@
 import { z } from "zod";
-
-const hexColor = z
-  .string()
-  .trim()
-  .regex(/^#[0-9a-fA-F]{6}$/, "Use a 6-digit hex color like #1a2b3c");
+import {
+  BACKGROUND_POSITIONS,
+  BACKGROUND_TYPES,
+  BARCODE_CONTENTS,
+  BARCODE_TYPES,
+  CustomFieldsSchema,
+  FONT_FAMILIES,
+  hexColor,
+  ICON_PRESETS,
+  ICON_SHAPES,
+  ICON_SOURCES,
+  LinksSchema,
+  optionalHex,
+} from "./design";
 
 export const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/;
 
@@ -40,6 +49,41 @@ export const CardInputSchema = z.object({
   headerValue: z.string().trim().max(20, "Header value: 20 characters max").default(""),
   nameLabel: z.string().trim().max(24, "Label above the name: 24 characters max").default(""),
   dayGlow: z.stringbool().default(false),
+  backgroundType: z.enum(BACKGROUND_TYPES).default("solid"),
+  bgColor2: optionalHex.default(null),
+  gradientAngle: z.coerce.number().int().min(0).max(360).default(135),
+  backgroundOverlay: z.coerce.number().int().min(0).max(80).default(35),
+  backgroundOverlayColor: hexColor.default("#000000"),
+  backgroundPosition: z.enum(BACKGROUND_POSITIONS).default("center"),
+  accentColor: hexColor.default("#4f46e5"),
+  fontFamily: z.enum(FONT_FAMILIES).default("sans"),
+  iconSource: z.enum(ICON_SOURCES).default("auto"),
+  iconPreset: z.union([z.enum(ICON_PRESETS), z.literal("")]).default(""),
+  iconShape: z.enum(ICON_SHAPES).default("rounded"),
+  monogramText: z.string().trim().max(2, "2 characters max").default(""),
+  links: LinksSchema.default([]),
+  customFields: CustomFieldsSchema.default([]),
+  barcodeType: z.enum(BARCODE_TYPES).default("qr"),
+  barcodeContent: z.enum(BARCODE_CONTENTS).default("link"),
+  barcodeValue: z
+    .string()
+    .trim()
+    .max(240)
+    .transform((v) => (v === "" ? null : v))
+    .default(null),
+}).superRefine((input, ctx) => {
+  if ((input.backgroundType === "linear" || input.backgroundType === "radial") && !input.bgColor2) {
+    ctx.addIssue({ code: "custom", path: ["bgColor2"], message: "Choose a second color for the gradient" });
+  }
+  if (input.barcodeContent === "custom" && !input.barcodeValue) {
+    ctx.addIssue({ code: "custom", path: ["barcodeValue"], message: "Enter the text to encode" });
+  }
+  if (input.barcodeType === "code128" && input.barcodeValue && !/^[\x20-\x7E]*$/.test(input.barcodeValue)) {
+    ctx.addIssue({ code: "custom", path: ["barcodeValue"], message: "Code 128 supports plain ASCII text only" });
+  }
+  if (input.customFields.filter((f) => f.location === "front").length > 4) {
+    ctx.addIssue({ code: "custom", path: ["customFields"], message: "Up to 4 fields on the front of the card" });
+  }
 });
 
 export type CardInput = z.infer<typeof CardInputSchema>;

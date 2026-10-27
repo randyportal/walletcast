@@ -2,10 +2,12 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getServices } from "@/lib/services";
 import { IntegrationBanner } from "@/components/IntegrationBanner";
+import { requireAdmin } from "@/server/auth";
 
 export const metadata: Metadata = { title: "Cards" };
 
 export default async function DashboardPage() {
+  await requireAdmin();
   const { config, cards } = await getServices();
   const list = await cards.listWithStats();
   return (

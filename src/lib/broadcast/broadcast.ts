@@ -39,7 +39,12 @@ export function passText(input: MessageInput): string {
   return `${input.title}: ${input.body}`;
 }
 
-export async function broadcast(deps: BroadcastDeps, cardId: string, input: MessageInput): Promise<BroadcastResult> {
+export async function broadcast(
+  deps: BroadcastDeps,
+  cardId: string,
+  input: MessageInput,
+  sentBy?: string | null,
+): Promise<BroadcastResult> {
   const now = deps.now?.() ?? new Date();
   const card = await deps.cards.findById(cardId);
   if (!card) throw new CardNotFoundError();
@@ -94,6 +99,7 @@ export async function broadcast(deps: BroadcastDeps, cardId: string, input: Mess
       cardId,
       title: input.title,
       body: input.body,
+      sentBy: sentBy ?? null,
       createdAt: now,
       appleTargets: apple.targets,
       appleSent: apple.sent,

@@ -8,12 +8,14 @@ import { CardForm } from "@/components/CardForm";
 import { SendForm } from "@/components/SendForm";
 import { QrPanel } from "@/components/QrPanel";
 import { deleteCardAction, sendMessageAction, updateCardAction } from "@/server/actions";
+import { requireAdmin } from "@/server/auth";
 
 export const metadata: Metadata = { title: "Card" };
 
 const dateFmt = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" });
 
 export default async function CardPage({ params }: PageProps<"/dashboard/cards/[id]">) {
+  await requireAdmin();
   const { id } = await params;
   const { config, cards, subscribers } = await getServices();
   const card = await cards.findById(id);
@@ -99,6 +101,7 @@ export default async function CardPage({ params }: PageProps<"/dashboard/cards/[
                     <p className="shrink-0 text-xs text-muted">{dateFmt.format(m.createdAt)}</p>
                   </div>
                   <p className="text-sm">{m.body}</p>
+                  {m.sentBy && <p className="text-xs text-muted">Sent by {m.sentBy}</p>}
                   <p className="mt-1 text-xs text-muted">
                     Apple {m.appleSent}/{m.appleTargets} · Google {m.googleSent}/{m.googleTargets}
                     {m.appleFailed + m.googleFailed > 0 && ` · ${m.appleFailed + m.googleFailed} failed`}
@@ -120,6 +123,8 @@ export default async function CardPage({ params }: PageProps<"/dashboard/cards/[
           glowHue={slotHue(glowSlot(new Date(), config.glowTimeZone))}
           existingLogoUrl={card.logo ? imageUrl("", card, "logo") : null}
           existingIconUrl={imageUrl("", card, "icon")}
+          existingBackgroundUrl={card.backgroundImage ? `/api/cards/${card.id}/image/background?v=${card.updatedAt.getTime()}` : null}
+          existingFaviconUrl={card.favicon ? `/api/cards/${card.id}/image/favicon?v=${card.updatedAt.getTime()}` : null}
           initial={{
             name: card.name,
             organizationName: card.organizationName,
@@ -130,6 +135,18 @@ export default async function CardPage({ params }: PageProps<"/dashboard/cards/[
             bgColor: card.bgColor,
             fgColor: card.fgColor,
             labelColor: card.labelColor,
+            accentColor: card.accentColor,
+            backgroundType: card.backgroundType,
+            bgColor2: card.bgColor2 ?? "",
+            gradientAngle: card.gradientAngle,
+            backgroundOverlay: card.backgroundOverlay,
+            backgroundOverlayColor: card.backgroundOverlayColor,
+            backgroundPosition: card.backgroundPosition,
+            fontFamily: card.fontFamily,
+            iconSource: card.iconSource,
+            iconPreset: card.iconPreset,
+            iconShape: card.iconShape,
+            monogramText: card.monogramText,
             latestLabel: card.latestLabel,
             contactUrl: card.contactUrl ?? "",
             logoText: card.logoText,
@@ -137,7 +154,12 @@ export default async function CardPage({ params }: PageProps<"/dashboard/cards/[
             headerValue: card.headerValue,
             nameLabel: card.nameLabel,
             barcode: card.barcode,
+            barcodeType: card.barcodeType,
+            barcodeContent: card.barcodeContent,
+            barcodeValue: card.barcodeValue ?? "",
             dayGlow: card.dayGlow,
+            links: card.links,
+            customFields: card.customFields,
           }}
         />
       </section>

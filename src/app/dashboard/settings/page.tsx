@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getServices } from "@/lib/services";
 import { APPLE_WEB_SERVICE_PATH } from "@/lib/apple/pass";
+import { requireAdmin } from "@/server/auth";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -11,6 +12,7 @@ function Status({ ok }: { ok: boolean }) {
 }
 
 export default async function SettingsPage() {
+  await requireAdmin();
   const { config } = await getServices();
   const rows: [string, string][] = [
     ["Public URL (BASE_URL)", config.baseUrl],

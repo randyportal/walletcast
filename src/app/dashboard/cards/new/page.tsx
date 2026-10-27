@@ -3,10 +3,12 @@ import { CardForm } from "@/components/CardForm";
 import { getConfig } from "@/lib/config/env";
 import { glowSlot, slotHue } from "@/lib/glow/hue";
 import { createCardAction } from "@/server/actions";
+import { requireAdmin } from "@/server/auth";
 
 export const metadata: Metadata = { title: "New card" };
 
-export default function NewCardPage() {
+export default async function NewCardPage() {
+  await requireAdmin();
   const glowHue = slotHue(glowSlot(new Date(), getConfig().glowTimeZone));
   return (
     <>

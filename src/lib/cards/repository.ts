@@ -1,6 +1,6 @@
 import { and, count, desc, eq, sql } from "drizzle-orm";
 import type { Db } from "@/lib/db/client";
-import { cards, messages, subscribers, type Card, type Message } from "@/lib/db/schema";
+import { cards, messages, subscribers, type Card, type Message, type NewCard } from "@/lib/db/schema";
 import type { CardInput } from "./validation";
 
 export class SlugTakenError extends Error {
@@ -18,6 +18,8 @@ export interface CardWithStats extends Card {
 export interface CardImages {
   logo?: Buffer | null;
   icon?: Buffer | null;
+  background?: Buffer | null;
+  favicon?: Buffer | null;
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -39,7 +41,13 @@ export function createCardRepository(db: Db) {
       try {
         const [card] = await db
           .insert(cards)
-          .values({ ...input, logo: images.logo ?? null, icon: images.icon ?? null })
+          .values({
+            ...input,
+            logo: images.logo ?? null,
+            icon: images.icon ?? null,
+            backgroundImage: images.background ?? null,
+            favicon: images.favicon ?? null,
+          })
           .returning();
         return card;
       } catch (error) {
@@ -50,14 +58,16 @@ export function createCardRepository(db: Db) {
 
     async update(id: string, input: CardInput, images: CardImages = {}): Promise<Card | null> {
       if (await slugExists(input.slug, id)) throw new SlugTakenError(input.slug);
-      const imagePatch: CardImages = {};
-      if (images.logo !== undefined) imagePatch.logo = images.logo;
-      if (images.icon !== undefined) imagePatch.icon = images.icon;
+      const patch: Partial<NewCard> = { ...input };
+      if (images.logo !== undefined) patch.logo = images.logo;
+      if (images.icon !== undefined) patch.icon = images.icon;
+      if (images.background !== undefined) patch.backgroundImage = images.background;
+      if (images.favicon !== undefined) patch.favicon = images.favicon;
       const now = new Date();
       return db.transaction(async (tx) => {
         const [card] = await tx
           .update(cards)
-          .set({ ...input, ...imagePatch, updatedAt: now })
+          .set({ ...patch, updatedAt: now })
           .where(eq(cards.id, id))
           .returning();
         if (!card) return null;

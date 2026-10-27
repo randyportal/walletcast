@@ -3,12 +3,14 @@ import {
   customType,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { CardField, CardLink } from "@/lib/cards/design";
 
 /** Binary column (PNG images). PGlite returns Uint8Array, postgres-js Buffer: normalise to Buffer. */
 const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
@@ -45,6 +47,25 @@ export const cards = pgTable("cards", {
   nameLabel: text("name_label").notNull().default(""),
   dayGlow: boolean("day_glow").notNull().default(false),
   glowSlot: integer("glow_slot"),
+  backgroundType: text("background_type").notNull().default("solid"),
+  bgColor2: text("bg_color2"),
+  gradientAngle: integer("gradient_angle").notNull().default(135),
+  backgroundImage: bytea("background_image"),
+  backgroundOverlay: integer("background_overlay").notNull().default(35),
+  backgroundOverlayColor: text("background_overlay_color").notNull().default("#000000"),
+  backgroundPosition: text("background_position").notNull().default("center"),
+  accentColor: text("accent_color").notNull().default("#4f46e5"),
+  fontFamily: text("font_family").notNull().default("sans"),
+  iconSource: text("icon_source").notNull().default("auto"),
+  iconPreset: text("icon_preset").notNull().default(""),
+  iconShape: text("icon_shape").notNull().default("rounded"),
+  monogramText: text("monogram_text").notNull().default(""),
+  favicon: bytea("favicon"),
+  links: jsonb("links").$type<CardLink[]>().notNull().default([]),
+  customFields: jsonb("custom_fields").$type<CardField[]>().notNull().default([]),
+  barcodeType: text("barcode_type").notNull().default("qr"),
+  barcodeContent: text("barcode_content").notNull().default("link"),
+  barcodeValue: text("barcode_value"),
   ...timestamps,
 });
 
@@ -105,12 +126,30 @@ export const messages = pgTable(
     googleTargets: integer("google_targets").notNull().default(0),
     googleSent: integer("google_sent").notNull().default(0),
     googleFailed: integer("google_failed").notNull().default(0),
+    sentBy: text("sent_by"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("messages_card_idx").on(t.cardId, t.createdAt)],
 );
 
+export const USER_ROLES = ["admin", "marketing"] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  username: text("username").notNull().unique(),
+  name: text("name").notNull(),
+  email: text("email").unique(),
+  passwordHash: text("password_hash").notNull(),
+  role: text("role", { enum: USER_ROLES }).notNull().default("marketing"),
+  enabled: boolean("enabled").notNull().default(true),
+  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  ...timestamps,
+});
+
 export type Card = typeof cards.$inferSelect;
 export type NewCard = typeof cards.$inferInsert;
 export type Subscriber = typeof subscribers.$inferSelect;
 export type Message = typeof messages.$inferSelect;
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;

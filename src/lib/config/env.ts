@@ -18,6 +18,7 @@ const optionalString = z
 const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   BASE_URL: z.url().default("http://localhost:3000"),
+  ADMIN_USERNAME: z.string().trim().default("admin"),
   ADMIN_PASSWORD: optionalString,
   SESSION_SECRET: optionalString,
   DATABASE_URL: optionalString,
@@ -71,6 +72,7 @@ export interface GoogleConfig {
 export interface AppConfig {
   env: RawEnv["NODE_ENV"];
   baseUrl: string;
+  adminUsername: string;
   adminPassword?: string;
   sessionSecret?: string;
   databaseUrl?: string;
@@ -168,6 +170,7 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
   return {
     env: raw.NODE_ENV,
     baseUrl: raw.BASE_URL.replace(/\/+$/, ""),
+    adminUsername: raw.ADMIN_USERNAME,
     adminPassword: raw.ADMIN_PASSWORD,
     sessionSecret: raw.SESSION_SECRET,
     databaseUrl: raw.DATABASE_URL,

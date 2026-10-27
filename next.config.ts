@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
     "/**": ["./src/lib/db/migrations/**/*"],
   },
   poweredByHeader: false,
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "12mb",
+    },
+  },
   // Dev only: let an HTTPS tunnel (needed to test Apple Wallet on a real iPhone) load dev assets.
   allowedDevOrigins: ["*.ngrok-free.app", "*.ngrok.app", "*.trycloudflare.com"],
 };

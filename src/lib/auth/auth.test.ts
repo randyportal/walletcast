@@ -1,29 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { checkPassword, createSessionToken, SESSION_TTL_SECONDS, sessionCookieOptions, verifySessionToken } from "./session";
+import { createSessionToken, SESSION_TTL_SECONDS, sessionCookieOptions, verifySessionToken, type SessionUser } from "./session";
 import { clientIp, createRateLimiter } from "@/lib/http/rateLimit";
 
 const secret = "s".repeat(32);
+const user: SessionUser = { id: "user-1", username: "admin", name: "Admin", role: "admin" };
 
 describe("admin session", () => {
-  it("checks the password", () => {
-    expect(checkPassword("hunter2", "hunter2")).toBe(true);
-    expect(checkPassword("hunter3", "hunter2")).toBe(false);
-    expect(checkPassword("", "hunter2")).toBe(false);
-    expect(checkPassword("x", null)).toBe(false);
+  it("round-trips a session token with the user", async () => {
+    const token = await createSessionToken(secret, user);
+    expect(await verifySessionToken(token, secret)).toEqual(user);
+    expect(await verifySessionToken(token, "o".repeat(32))).toBeNull();
+    expect(await verifySessionToken(undefined, secret)).toBeNull();
+    expect(await verifySessionToken("garbage", secret)).toBeNull();
+    expect(await verifySessionToken(token, null)).toBeNull();
   });
 
-  it("round-trips a session token", async () => {
-    const token = await createSessionToken(secret);
-    expect(await verifySessionToken(token, secret)).toBe(true);
-    expect(await verifySessionToken(token, "o".repeat(32))).toBe(false);
-    expect(await verifySessionToken(undefined, secret)).toBe(false);
-    expect(await verifySessionToken("garbage", secret)).toBe(false);
-    expect(await verifySessionToken(token, null)).toBe(false);
+  it("rejects tokens with an unknown role", async () => {
+    const tampered = await new (await import("jose")).SignJWT({ role: "owner", username: "x", name: "X" })
+      .setProtectedHeader({ alg: "HS256" })
+      .setSubject("user-1")
+      .setAudience("walletcast-session")
+      .setIssuedAt(Math.floor(Date.now() / 1000))
+      .setExpirationTime(Math.floor(Date.now() / 1000) + 60)
+      .sign(new TextEncoder().encode(secret));
+    expect(await verifySessionToken(tampered, secret)).toBeNull();
   });
 
   it("expires tokens", async () => {
-    const old = await createSessionToken(secret, new Date(Date.now() - (SESSION_TTL_SECONDS + 60) * 1000));
-    expect(await verifySessionToken(old, secret)).toBe(false);
+    const old = await createSessionToken(secret, user, new Date(Date.now() - (SESSION_TTL_SECONDS + 60) * 1000));
+    expect(await verifySessionToken(old, secret)).toBeNull();
   });
 
   it("builds secure cookie options", () => {

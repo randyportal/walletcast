@@ -1,0 +1,199 @@
+import { z } from "zod";
+
+export const BACKGROUND_TYPES = ["solid", "linear", "radial", "image"] as const;
+export type BackgroundType = (typeof BACKGROUND_TYPES)[number];
+
+export const BACKGROUND_POSITIONS = ["center", "top", "bottom", "left", "right"] as const;
+export type BackgroundPosition = (typeof BACKGROUND_POSITIONS)[number];
+
+export const FONT_FAMILIES = ["sans", "serif", "rounded", "mono", "condensed"] as const;
+export type FontFamily = (typeof FONT_FAMILIES)[number];
+
+export const ICON_SOURCES = ["auto", "preset", "monogram"] as const;
+export type IconSource = (typeof ICON_SOURCES)[number];
+
+export const ICON_PRESETS = [
+  "star",
+  "heart",
+  "coffee",
+  "gift",
+  "ticket",
+  "crown",
+  "sparkles",
+  "bag",
+  "leaf",
+  "bolt",
+] as const;
+export type IconPreset = (typeof ICON_PRESETS)[number];
+
+export const ICON_SHAPES = ["rounded", "circle", "square"] as const;
+export type IconShape = (typeof ICON_SHAPES)[number];
+
+export const LINK_ICONS = [
+  "link",
+  "globe",
+  "mail",
+  "phone",
+  "message",
+  "pin",
+  "instagram",
+  "calendar",
+  "bag",
+  "star",
+] as const;
+export type LinkIcon = (typeof LINK_ICONS)[number];
+
+export const LINK_STYLES = ["primary", "secondary", "outline"] as const;
+export type LinkStyle = (typeof LINK_STYLES)[number];
+
+export const BARCODE_TYPES = ["qr", "pdf417", "aztec", "code128"] as const;
+export type BarcodeType = (typeof BARCODE_TYPES)[number];
+
+export const BARCODE_CONTENTS = ["link", "website", "custom"] as const;
+export type BarcodeContent = (typeof BARCODE_CONTENTS)[number];
+
+export const FIELD_LOCATIONS = ["front", "back"] as const;
+export type FieldLocation = (typeof FIELD_LOCATIONS)[number];
+
+export interface CardLink {
+  id: string;
+  label: string;
+  url: string;
+  icon: LinkIcon;
+  style: LinkStyle;
+}
+
+export interface CardField {
+  id: string;
+  label: string;
+  value: string;
+  location: FieldLocation;
+}
+
+export const hexColor = z
+  .string()
+  .trim()
+  .regex(/^#[0-9a-fA-F]{6}$/, "Use a 6-digit hex color like #1a2b3c");
+
+export const optionalHex = z
+  .string()
+  .trim()
+  .transform((v) => (v === "" ? null : v))
+  .pipe(hexColor.nullable());
+
+function allowedLink(value: string): boolean {
+  try {
+    return ["http:", "https:", "mailto:", "tel:"].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+
+export const CardLinkSchema = z.object({
+  id: z.string().min(1).max(20),
+  label: z.string().trim().min(1, "Label is required").max(24),
+  url: z.string().trim().min(1, "URL is required").max(500).refine(allowedLink, "Use an http(s), mailto or tel link"),
+  icon: z.enum(LINK_ICONS).default("link"),
+  style: z.enum(LINK_STYLES).default("secondary"),
+});
+
+export const CardFieldSchema = z.object({
+  id: z.string().min(1).max(20),
+  label: z.string().trim().min(1, "Label is required").max(16),
+  value: z.string().trim().min(1, "Value is required").max(60),
+  location: z.enum(FIELD_LOCATIONS).default("back"),
+});
+
+export const LinksSchema = z.preprocess((v) => {
+  if (typeof v !== "string" || v.trim() === "") return [];
+  try {
+    return JSON.parse(v);
+  } catch {
+    return v;
+  }
+}, z.array(CardLinkSchema).max(6, "Up to 6 buttons"));
+
+export const CustomFieldsSchema = z.preprocess((v) => {
+  if (typeof v !== "string" || v.trim() === "") return [];
+  try {
+    return JSON.parse(v);
+  } catch {
+    return v;
+  }
+}, z.array(CardFieldSchema).max(8, "Up to 8 fields"));
+
+export function isHeroBackground(type: BackgroundType | string | null | undefined): boolean {
+  return type === "linear" || type === "radial" || type === "image";
+}
+
+export function cardUsesHero(card: { dayGlow: boolean; backgroundType: BackgroundType | string | null }): boolean {
+  return card.dayGlow || isHeroBackground(card.backgroundType);
+}
+
+export function hexToRgba(hex: string, alpha: number): string {
+  const n = Number.parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+export interface CardBackgroundInput {
+  backgroundType: string;
+  bgColor: string;
+  bgColor2: string | null;
+  gradientAngle: number;
+  backgroundOverlay: number;
+  backgroundOverlayColor: string;
+  backgroundPosition: string;
+  backgroundImageUrl?: string | null;
+}
+
+export interface CardBackgroundStyle {
+  backgroundColor: string;
+  backgroundImage?: string;
+  backgroundSize?: string;
+  backgroundPosition?: string;
+}
+
+export function cardBackgroundStyle(input: CardBackgroundInput): CardBackgroundStyle {
+  const overlay = hexToRgba(input.backgroundOverlayColor, input.backgroundOverlay / 100);
+  switch (input.backgroundType) {
+    case "linear":
+      return {
+        backgroundColor: input.bgColor,
+        backgroundImage: `linear-gradient(${input.gradientAngle}deg, ${input.bgColor}, ${input.bgColor2 ?? input.bgColor})`,
+      };
+    case "radial":
+      return {
+        backgroundColor: input.bgColor,
+        backgroundImage: `radial-gradient(circle at 50% 0%, ${input.bgColor}, ${input.bgColor2 ?? input.bgColor})`,
+      };
+    case "image":
+      if (!input.backgroundImageUrl) return { backgroundColor: input.bgColor };
+      return {
+        backgroundColor: input.bgColor,
+        backgroundImage: `linear-gradient(${overlay}, ${overlay}), url("${input.backgroundImageUrl}")`,
+        backgroundSize: "cover",
+        backgroundPosition: input.backgroundPosition,
+      };
+    default:
+      return { backgroundColor: input.bgColor };
+  }
+}
+
+export function relativeLuminance(hex: string): number {
+  const n = Number.parseInt(hex.slice(1), 16);
+  const channel = (v: number) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * channel((n >> 16) & 255) + 0.7152 * channel((n >> 8) & 255) + 0.0722 * channel(n & 255);
+}
+
+export function contrastRatio(a: string, b: string): number {
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  const [light, dark] = la >= lb ? [la, lb] : [lb, la];
+  return (light + 0.05) / (dark + 0.05);
+}

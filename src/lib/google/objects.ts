@@ -1,6 +1,7 @@
 import type { Card, Subscriber } from "@/lib/db/schema";
 import { latestMessageText } from "@/lib/apple/pass";
-import { publicCardUrl } from "@/lib/cards/links";
+import { cardUsesHero } from "@/lib/cards/design";
+import { GOOGLE_BARCODE_TYPES, resolveBarcode } from "@/lib/cards/barcode";
 
 /**
  * Mapping WalletCast cards/subscribers to Google Wallet Generic passes.
@@ -18,7 +19,7 @@ export function objectId(issuerId: string, subscriber: Pick<Subscriber, "serialN
   return `${issuerId}.${subscriber.serialNumber.replace(/[^\w.-]/g, "_")}`;
 }
 
-export function imageUrl(baseUrl: string, card: Pick<Card, "id" | "updatedAt">, kind: "logo" | "icon"): string {
+export function imageUrl(baseUrl: string, card: Pick<Card, "id" | "updatedAt">, kind: "logo" | "icon" | "hero"): string {
   return `${baseUrl}/api/cards/${card.id}/image/${kind}?v=${card.updatedAt.getTime()}`;
 }
 
@@ -58,6 +59,22 @@ export function buildGenericObject(issuerId: string, card: Card, subscriber: Sub
  * broadcast so design edits also reach Google passes.
  */
 export function buildObjectPatch(card: Card, baseUrl: string) {
+  const hero = cardUsesHero(card);
+  const barcode = resolveBarcode(card, baseUrl);
+
+  const links: { uri: string; description: string; id: string }[] = [];
+  if (card.websiteUrl) links.push({ uri: card.websiteUrl, description: "Website", id: "website" });
+  if (card.contactUrl) links.push({ uri: card.contactUrl, description: "Save contact", id: "contact" });
+  for (const link of card.links) {
+    links.push({ uri: link.url, description: link.label, id: `link_${link.id}` });
+  }
+
+  const textModulesData = [
+    { id: "latest", header: "Latest", body: latestMessageText(card) },
+    ...(card.description ? [{ id: "about", header: "About", body: card.description }] : []),
+    ...card.customFields.map((field) => ({ id: `cf_${field.id}`, header: field.label, body: field.value })),
+  ];
+
   return {
     cardTitle: localized(card.organizationName),
     header: localized(card.name),
@@ -74,13 +91,18 @@ export function buildObjectPatch(card: Card, baseUrl: string) {
           },
         }
       : {}),
-    ...(card.barcode ? { barcode: { type: "QR_CODE", value: publicCardUrl(baseUrl, card.slug, "pass") } } : {}),
-    textModulesData: [
-      { id: "latest", header: "Latest", body: latestMessageText(card) },
-      ...(card.description ? [{ id: "about", header: "About", body: card.description }] : []),
-    ],
+    ...(hero
+      ? {
+          heroImage: {
+            sourceUri: { uri: imageUrl(baseUrl, card, "hero") },
+            contentDescription: localized(`${card.name} background`),
+          },
+        }
+      : {}),
+    ...(barcode ? { barcode: { type: GOOGLE_BARCODE_TYPES[barcode.format], value: barcode.value } } : {}),
+    textModulesData,
     linksModuleData: {
-      uris: card.websiteUrl ? [{ uri: card.websiteUrl, description: "Website", id: "website" }] : [],
+      uris: links,
     },
   };
 }
