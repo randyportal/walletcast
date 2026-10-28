@@ -11,7 +11,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   await requireAdmin();
   const { config, cards } = await getServices();
   const list = await cards.listWithStats();
-  const { googleSynced, googleFailed, googleError } = await searchParams;
+  const { googleSynced, googleFailed, googleError, googleWarn } = await searchParams;
   return (
     <>
       <IntegrationBanner config={config} />
@@ -19,6 +19,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         <p className="mb-4 text-sm text-success">Google actualizado en {googleSynced} tarjeta(s){typeof googleFailed === "string" && googleFailed !== "0" ? `, ${googleFailed} con avisos` : ""}.</p>
       )}
       {googleError === "not-configured" && <p className="mb-4 text-sm text-warning">Google Wallet no está configurado en este servidor.</p>}
+      {typeof googleWarn === "string" && <p className="mb-4 text-sm text-warning">{googleWarn}</p>}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Tarjetas</h1>
         <div className="flex items-center gap-2">

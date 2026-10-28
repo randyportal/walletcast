@@ -293,15 +293,22 @@ export async function syncAllGoogleAction(): Promise<void> {
   const list = await services.cards.listWithStats();
   let synced = 0;
   let failed = 0;
+  let firstWarning: string | null = null;
   for (const item of list) {
     const card = await services.cards.findById(item.id);
     if (!card) continue;
     const warnings = await syncGoogleCard(card, services);
-    if (warnings.length > 0) failed += 1;
-    else synced += 1;
+    if (warnings.length > 0) {
+      failed += 1;
+      firstWarning ??= `${card.name}: ${warnings[0]}`;
+      console.warn(`[walletcast] google sync ${card.slug}: ${warnings.join(" | ")}`);
+    } else {
+      synced += 1;
+    }
   }
   revalidatePath("/dashboard");
-  redirect(`/dashboard?googleSynced=${synced}&googleFailed=${failed}`);
+  const warningQuery = firstWarning ? `&googleWarn=${encodeURIComponent(firstWarning.slice(0, 350))}` : "";
+  redirect(`/dashboard?googleSynced=${synced}&googleFailed=${failed}${warningQuery}`);
 }
 
 export async function deleteCardAction(cardId: string): Promise<void> {
