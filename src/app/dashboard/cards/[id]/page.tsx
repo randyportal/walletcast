@@ -208,6 +208,7 @@ export default async function CardPage({ params, searchParams }: PageProps<"/das
             contentConfig: content.config,
             publicPageMode: card.publicPageMode,
             askEmail: card.askEmail,
+            emailRequired: card.emailRequired,
           }}
         />
       </section>

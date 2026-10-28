@@ -75,6 +75,7 @@ export const cards = pgTable("cards", {
   appleImage: bytea("apple_image"),
   publicPageMode: text("public_page_mode").notNull().default("full"),
   askEmail: boolean("ask_email").notNull().default(true),
+  emailRequired: boolean("email_required").notNull().default(false),
   ...timestamps,
 });
 

@@ -16,6 +16,9 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/passes/
 
   const parsed = IssueRequestSchema.safeParse(await readFields(request));
   if (!parsed.success) return publicError(request, slug, 400, "Correo electrónico inválido");
+  if (card.emailRequired && !parsed.data.email) {
+    return publicError(request, slug, 400, "El correo electrónico es obligatorio");
+  }
 
   try {
     const pkpass = await issueApplePass(config, cards, subscribers, card, parsed.data);

@@ -4,17 +4,11 @@ import { notFound } from "next/navigation";
 import { userAgent } from "next/server";
 import { getServices } from "@/lib/services";
 import { imageUrl } from "@/lib/google/objects";
-import { latestMessageText } from "@/lib/apple/pass";
 import { normaliseSource } from "@/lib/cards/links";
-import { cardBackgroundStyle, contrastRatio } from "@/lib/cards/design";
-import { fontStack } from "@/lib/cards/fonts";
+import { contrastRatio, hexToRgba } from "@/lib/cards/design";
 import { faviconIcons } from "@/lib/cards/favicon";
 import { glowSlot, slotHue } from "@/lib/glow/hue";
-import { PassPreview } from "@/components/PassPreview";
-import { GooglePreview } from "@/components/GooglePreview";
-import { normalizeGoogleConfig } from "@/lib/cards/google";
-import { normalizeAppleConfig } from "@/lib/cards/apple";
-import { normalizeContent, previousMessages, visibleRecommendations } from "@/lib/cards/content";
+import { PublicCardHero } from "@/components/PublicCardHero";
 
 export async function generateMetadata({ params }: PageProps<"/c/[slug]">): Promise<Metadata> {
   const { slug } = await params;
@@ -35,10 +29,6 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
   const { config, cards } = await getServices();
   const card = await cards.findBySlug(slug);
   if (!card) notFound();
-  const content = normalizeContent(card);
-  const recent = await cards.listMessages(card.id, content.config.latest.historyLimit + 1);
-  const history = previousMessages(recent, card.latestMessage);
-  const recommendations = content.config.recommendations.show ? visibleRecommendations(content.links) : [];
 
   const os = userAgent({ headers: await headers() }).os.name ?? "";
   const isAndroid = /android/i.test(os);
@@ -49,209 +39,107 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
     config.google && !isApple && { key: "google", label: "Agregar a Google Wallet", action: `/api/passes/google/${card.slug}` },
   ].filter((b): b is { key: string; label: string; action: string } => Boolean(b));
   const minimal = card.publicPageMode === "minimal";
+  const emailMode = !card.askEmail ? "off" : card.emailRequired ? "required" : "optional";
+  const heroGlow = card.dayGlow ? slotHue(glowSlot(new Date(), config.glowTimeZone)) : null;
 
-  const style = cardBackgroundStyle({
-    backgroundType: card.backgroundType,
-    bgColor: card.bgColor,
-    bgColor2: card.bgColor2,
-    gradientAngle: card.gradientAngle,
-    backgroundOverlay: card.backgroundOverlay,
-    backgroundOverlayColor: card.backgroundOverlayColor,
-    backgroundPosition: card.backgroundPosition,
-    backgroundImageUrl: card.backgroundImage ? `/api/cards/${card.id}/image/background?v=${card.updatedAt.getTime()}` : null,
-  });
-
-  const backgroundUrl = card.backgroundImage ? `/api/cards/${card.id}/image/background?v=${card.updatedAt.getTime()}` : null;
-  const preview = isAndroid && config.google ? (
-    <GooglePreview
-      organizationName={card.organizationName}
-      name={card.name}
-      latestLabel={card.latestLabel}
-      description={card.description}
-      message={latestMessageText(card)}
-      websiteUrl={card.websiteUrl ?? undefined}
-      contactUrl={card.contactUrl ?? undefined}
-      bgColor={card.bgColor}
-      fgColor={card.fgColor}
-      labelColor={card.labelColor}
-      accentColor={card.accentColor}
-      backgroundType={card.backgroundType}
-      bgColor2={card.bgColor2}
-      gradientAngle={card.gradientAngle}
-      backgroundOverlay={card.backgroundOverlay}
-      backgroundOverlayColor={card.backgroundOverlayColor}
-      backgroundPosition={card.backgroundPosition}
-      backgroundImageUrl={backgroundUrl}
-      fontFamily={card.fontFamily}
-      logoUrl={card.logo ? imageUrl("", card, "logo") : null}
-      iconUrl={imageUrl("", card, "icon")}
-      barcode={card.barcode}
-      qrUrl={`/api/cards/${card.id}/qr?src=pass`}
-      glowHue={card.dayGlow ? slotHue(glowSlot(new Date(), config.glowTimeZone)) : null}
-      googleConfig={normalizeGoogleConfig(card.googleConfig)}
-      contentConfig={content.config}
-      history={history}
-      links={minimal ? [] : recommendations}
-      customFields={card.customFields}
-      cardId={card.id}
-    />
-  ) : (
-    <PassPreview
-      organizationName={card.organizationName}
-      name={card.name}
-      description={card.description}
-      message={latestMessageText(card)}
-      websiteUrl={card.websiteUrl ?? undefined}
-      contactUrl={card.contactUrl ?? undefined}
-      bgColor={card.bgColor}
-      fgColor={card.fgColor}
-      labelColor={card.labelColor}
-      accentColor={card.accentColor}
-      backgroundType={card.backgroundType}
-      bgColor2={card.bgColor2}
-      gradientAngle={card.gradientAngle}
-      backgroundOverlay={card.backgroundOverlay}
-      backgroundOverlayColor={card.backgroundOverlayColor}
-      backgroundPosition={card.backgroundPosition}
-      backgroundImageUrl={backgroundUrl}
-      fontFamily={card.fontFamily}
-      logoUrl={card.logo ? imageUrl("", card, "logo") : null}
-      iconUrl={imageUrl("", card, "icon")}
-      latestLabel={card.latestLabel}
-      logoText={card.logoText}
-      headerLabel={card.headerLabel}
-      headerValue={card.headerValue}
-      nameLabel={card.nameLabel}
-      barcode={card.barcode}
-      barcodeType={card.barcodeType}
-      customFields={card.customFields}
-      links={minimal ? [] : recommendations}
-      qrUrl={`/api/cards/${card.id}/qr?src=pass`}
-      glowHue={card.dayGlow ? slotHue(glowSlot(new Date(), config.glowTimeZone)) : null}
-      appleConfig={normalizeAppleConfig(card.appleConfig)}
-      contentConfig={content.config}
-      history={history}
-      cardId={card.id}
-      appleImageUrl={card.appleImage ? `/api/cards/${card.id}/image/apple-image?v=${card.updatedAt.getTime()}` : null}
-    />
-  );
-
-  const addButtons = buttons.length > 0 && (
-    <form method="post" className="space-y-3">
+  const addForm = buttons.length > 0 && (
+    <form method="post" className="space-y-4">
       {source && <input type="hidden" name="src" value={source} />}
-      {card.askEmail && !minimal && (
+      <div className="text-center">
+        <h2 className="text-lg font-bold tracking-tight">Agrega la tarjeta a tu teléfono</h2>
+        <p className="mt-1 text-sm text-muted">Un toque y queda guardada. Sin app y sin cuenta.</p>
+      </div>
+      {emailMode !== "off" && (
         <label className="block">
-          <span className="text-sm font-medium" style={{ color: card.fgColor }}>Correo (opcional)</span>
-          <input name="email" type="email" className="input" placeholder="you@example.com" autoComplete="email" />
+          <span className="field-label">
+            Correo electrónico {emailMode === "optional" && <span className="font-normal text-muted">(opcional)</span>}
+          </span>
+          <input
+            name="email"
+            type="email"
+            className="input"
+            placeholder="tu@correo.com"
+            autoComplete="email"
+            required={emailMode === "required"}
+            aria-required={emailMode === "required"}
+          />
+          {emailMode === "required" && <p className="field-hint">Necesitamos tu correo para agregar la tarjeta.</p>}
         </label>
       )}
-      {buttons.map((b, i) => (
-        <button
-          key={b.key}
-          formAction={b.action}
-          className="w-full rounded-lg px-4 py-3 text-base"
-          style={
-            i === 0
-              ? { background: card.accentColor, color: accentText(card.accentColor) }
-              : { border: "1px solid currentColor", color: card.accentColor }
-          }
-        >
-          {b.label}
-        </button>
-      ))}
-      {error && <p className="text-center text-sm text-danger">{error === "429" ? "Demasiados intentos. Inténtalo de nuevo en un minuto." : error === "400" ? "Ese correo no parece válido." : "Algo salió mal. Inténtalo de nuevo."}</p>}
-      {!minimal && card.contactUrl && (
-        <a href={card.contactUrl} className="block text-center text-sm underline">
-          Guardar contacto
-        </a>
+      <div className="space-y-2">
+        {buttons.map((b, i) => (
+          <button
+            key={b.key}
+            formAction={b.action}
+            className="min-h-12 w-full rounded-2xl px-4 py-3 text-base font-semibold shadow-sm transition-transform active:scale-[0.99]"
+            style={
+              i === 0
+                ? { background: card.accentColor, color: accentText(card.accentColor) }
+                : { border: "1px solid var(--border)", color: "var(--foreground)", background: "transparent" }
+            }
+          >
+            {b.label}
+          </button>
+        ))}
+      </div>
+      {error && (
+        <p role="alert" className="text-center text-sm text-danger">
+          {error === "429"
+            ? "Demasiados intentos. Inténtalo de nuevo en un minuto."
+            : error === "400"
+              ? emailMode === "required"
+                ? "Revisa el correo electrónico: es obligatorio y debe ser válido."
+                : "Ese correo no parece válido."
+              : "Algo salió mal. Inténtalo de nuevo."}
+        </p>
       )}
     </form>
   );
 
   return (
-    <main
-      className="flex flex-1 flex-col items-center px-4 py-8 sm:py-12"
-      style={{
-        backgroundColor: style.backgroundColor,
-        backgroundImage: style.backgroundImage,
-        backgroundSize: style.backgroundSize,
-        backgroundPosition: style.backgroundPosition,
-        color: card.fgColor,
-        fontFamily: fontStack(card.fontFamily),
-      }}
-    >
-      <div className="w-full max-w-sm space-y-5">
-        {preview}
+    <main className="relative flex min-h-dvh flex-1 flex-col items-center justify-center overflow-hidden bg-background px-4 py-8 sm:py-12">
+      <div
+        className="pointer-events-none fixed inset-0 -z-10"
+        style={{ background: `radial-gradient(72% 55% at 50% 0%, ${hexToRgba(card.accentColor, 0.2)}, transparent 68%)` }}
+      />
+      <div className="w-full max-w-md space-y-4">
+        <PublicCardHero
+          organizationName={card.organizationName}
+          name={card.name}
+          description={minimal ? "" : card.description}
+          welcomeText={minimal ? "" : card.welcomeText}
+          nameLabel={card.nameLabel}
+          logoText={card.logoText}
+          headerLabel={card.headerLabel}
+          headerValue={card.headerValue}
+          logoUrl={card.logo ? imageUrl("", card, "logo") : null}
+          iconUrl={imageUrl("", card, "icon")}
+          bgColor={card.bgColor}
+          fgColor={card.fgColor}
+          labelColor={card.labelColor}
+          accentColor={card.accentColor}
+          backgroundType={card.backgroundType}
+          bgColor2={card.bgColor2}
+          gradientAngle={card.gradientAngle}
+          backgroundOverlay={card.backgroundOverlay}
+          backgroundOverlayColor={card.backgroundOverlayColor}
+          backgroundPosition={card.backgroundPosition}
+          backgroundImageUrl={card.backgroundImage ? `/api/cards/${card.id}/image/background?v=${card.updatedAt.getTime()}` : null}
+          fontFamily={card.fontFamily}
+          glowHue={heroGlow}
+          compact={minimal}
+        />
 
-        {minimal ? (
-          addButtons || (
-            <p className="panel text-center text-sm" style={{ color: card.labelColor }}>
-              Esta tarjeta aún no está disponible.
-            </p>
-          )
-        ) : (
-          <>
-            <div className="space-y-2 text-center">
-              <h1 className="text-2xl font-bold tracking-tight">Agrega {card.name} a tu cartera</h1>
-              {card.description && <p className="text-sm leading-relaxed" style={{ color: card.labelColor }}>{card.description}</p>}
-              <p className="text-xs" style={{ color: card.labelColor }}>Sin app ni cuenta. Elimina la tarjeta cuando quieras para dejar de recibir avisos.</p>
-            </div>
-
-            {buttons.length === 0 ? (
-              recommendations.length === 0 ? (
-                <p className="panel text-center text-sm" style={{ color: card.labelColor }}>Esta tarjeta aún no está disponible.</p>
-              ) : null
-            ) : (
-              addButtons
-            )}
-
-            {recommendations.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium" style={{ color: card.labelColor }}>{content.config.recommendations.title}</p>
-                {recommendations.map((link) => (
-                  <a
-                    key={link.id}
-                    href={link.url}
-                    className="flex items-center gap-3 rounded-lg px-4 py-3 text-base"
-                    style={
-                      link.style === "primary"
-                        ? { background: card.accentColor, color: accentText(card.accentColor) }
-                        : link.style === "outline"
-                          ? { border: "1px solid currentColor", color: card.accentColor }
-                          : { border: "1px solid currentColor", color: card.fgColor }
-                    }
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={`/api/cards/${card.id}/link-icon/link:${link.id}?v=${card.updatedAt.getTime()}`}
-                      alt=""
-                      className="h-6 w-6 shrink-0 rounded-md object-cover"
-                    />
-                    <span className="min-w-0">
-                      <span className="block truncate">{link.label}</span>
-                      {link.subtitle && <span className="block truncate text-xs opacity-80">{link.subtitle}</span>}
-                    </span>
-                  </a>
-                ))}
-              </div>
-            )}
-
-            {card.customFields.length > 0 && (
-              <div className="space-y-2 rounded-xl border border-white/10 p-4" style={{ background: "rgba(0,0,0,0.12)" }}>
-                {card.customFields.map((f) => (
-                  <div key={f.id} className="flex justify-between gap-4 text-sm">
-                    <span style={{ color: card.labelColor }}>{f.label}</span>
-                    <span className="text-right font-medium">{f.value}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
+        {addForm || (
+          <section className="panel p-5 text-center">
+            <h2 className="text-lg font-bold tracking-tight">Muy pronto podrás agregar esta tarjeta</h2>
+            <p className="mt-1 text-sm text-muted">Estamos terminando de configurar Apple Wallet y Google Wallet para esta tarjeta.</p>
+          </section>
         )}
 
-        <p className="pt-2 text-center text-[10px] font-medium uppercase tracking-[0.2em]" style={{ color: card.labelColor }}>
+        <footer className="pt-2 text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
           Travel Portal Wallet Card
-        </p>
+        </footer>
       </div>
     </main>
   );

@@ -1,0 +1,2 @@
+ALTER TABLE "cards" ALTER COLUMN "content_config" SET DEFAULT '{"version":0,"latest":{"show":true,"showHistory":true,"historyTitle":"Mensajes recientes","historyLimit":5},"recommendations":{"show":true,"title":"Recomendaciones","iconBackground":""}}'::jsonb;--> statement-breakpoint
+ALTER TABLE "cards" ADD COLUMN "email_required" boolean DEFAULT false NOT NULL;

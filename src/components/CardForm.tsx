@@ -71,6 +71,7 @@ export interface CardFormValues {
   contentConfig: ContentConfig;
   publicPageMode: string;
   askEmail: boolean;
+  emailRequired: boolean;
 }
 
 const DEFAULTS: CardFormValues = {
@@ -113,6 +114,7 @@ const DEFAULTS: CardFormValues = {
   contentConfig: DEFAULT_CONTENT_CONFIG,
   publicPageMode: "full",
   askEmail: true,
+  emailRequired: false,
 };
 
 const PRESETS: { name: string; patch: Partial<CardFormValues> }[] = [
@@ -339,6 +341,7 @@ export function CardForm(props: Props) {
   const update = (patch: Partial<CardFormValues>) => setValues((prev) => ({ ...prev, ...patch }));
   const google = values.googleConfig;
   const apple = values.appleConfig;
+  const emailMode = !values.askEmail ? "off" : values.emailRequired ? "required" : "optional";
   const iconBackground = /^#[0-9a-fA-F]{6}$/.test(values.contentConfig.recommendations.iconBackground)
     ? values.contentConfig.recommendations.iconBackground
     : values.accentColor;
@@ -1116,14 +1119,27 @@ export function CardForm(props: Props) {
             <label className="block">
               <span className="field-label">Estilo de la página pública</span>
               <select name="publicPageMode" className="input" value={values.publicPageMode} onChange={set("publicPageMode")}>
-                <option value="full">Completa (vista previa, descripción, recomendaciones y campos)</option>
-                <option value="minimal">Mínima (vista previa + botón de agregar)</option>
+                <option value="full">Completa (tarjeta, descripción, botón y correo)</option>
+                <option value="minimal">Mínima (tarjeta y botón de agregar)</option>
               </select>
             </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="hidden" name="askEmail" value="off" />
-              <input type="checkbox" name="askEmail" checked={values.askEmail} onChange={(e) => update({ askEmail: e.target.checked })} />
-              Pedir correo en la página pública completa
+            <label className="block">
+              <span className="field-label">Correo en la página pública</span>
+              <input type="hidden" name="askEmail" value={values.askEmail ? "on" : "off"} />
+              <input type="hidden" name="emailRequired" value={values.emailRequired ? "on" : "off"} />
+              <select
+                className="input"
+                value={emailMode}
+                onChange={(e) => {
+                  const mode = e.target.value;
+                  update({ askEmail: mode !== "off", emailRequired: mode === "required" });
+                }}
+              >
+                <option value="off">No pedir correo</option>
+                <option value="optional">Opcional</option>
+                <option value="required">Obligatorio</option>
+              </select>
+              <p className="field-hint">Si es obligatorio, el cliente no podrá agregar la tarjeta sin un correo válido.</p>
             </label>
 
             <label className="block">

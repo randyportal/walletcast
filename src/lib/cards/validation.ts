@@ -86,6 +86,7 @@ export const CardInputSchema = z.object({
   contentConfig: ContentConfigInputSchema.default(DEFAULT_CONTENT_CONFIG),
   publicPageMode: z.enum(["full", "minimal"]).default("full"),
   askEmail: checkbox(true),
+  emailRequired: checkbox(false),
 }).superRefine((input, ctx) => {
   if ((input.backgroundType === "linear" || input.backgroundType === "radial") && !input.bgColor2) {
     ctx.addIssue({ code: "custom", path: ["bgColor2"], message: "Elige un segundo color para el degradado" });
