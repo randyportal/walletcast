@@ -50,6 +50,13 @@
       "when": 1793141071299,
       "tag": "0006_tiresome_gabe_jones",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793149118905,
+      "tag": "0007_translate_latest_label",
+      "breakpoints": true
     }
   ]
 }
