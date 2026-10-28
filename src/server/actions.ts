@@ -26,6 +26,7 @@ import {
 } from "@/lib/cards/images";
 import { broadcast } from "@/lib/broadcast/broadcast";
 import { buildGenericClass, buildObjectPatch, objectId } from "@/lib/google/objects";
+import { GoogleWalletError } from "@/lib/google/client";
 import type { Card } from "@/lib/db/schema";
 import { requireAdmin, requireUser } from "./auth";
 
@@ -198,6 +199,11 @@ async function syncGoogleCard(card: Card, services: Services): Promise<string[]>
         await googleApi.patchGenericObject(objectId(google.issuerId, subscriber), patch);
         return null;
       } catch (error) {
+        if (error instanceof GoogleWalletError && error.status === 404) {
+          // The pass was removed from Google Wallet. Stop syncing it.
+          await subscribers.setStatus(subscriber.serialNumber, "removed");
+          return null;
+        }
         return error instanceof Error ? error.message : String(error);
       }
     });

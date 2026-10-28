@@ -5,7 +5,7 @@ import { createCardRepository, type CardRepository } from "@/lib/cards/repositor
 import { createSubscriberRepository, type SubscriberRepository } from "@/lib/subscribers/repository";
 import { CardInputSchema } from "@/lib/cards/validation";
 import type { ApnsSender } from "@/lib/apple/apns";
-import type { GoogleWalletApi } from "@/lib/google/client";
+import { GoogleWalletError, type GoogleWalletApi } from "@/lib/google/client";
 import { broadcast, CardNotFoundError, GOOGLE_DAILY_NOTIFICATION_LIMIT, passText } from "./broadcast";
 
 const input = { title: "Flash sale", body: "-20% today only" };
@@ -78,6 +78,24 @@ describe("broadcast", () => {
     });
     expect(result.errors).toEqual(["Apple: t-dead: Unregistered", "Google: boom"]);
     expect((await cards.findById(cardId))?.latestMessage).toBe(passText(input));
+  });
+
+  it("marks Google passes removed when Google returns 404", async () => {
+    const sub = await subscribers.create({ cardId, platform: "google" });
+    const api: GoogleWalletApi = {
+      async upsertGenericClass() {},
+      async patchGenericObject() {
+        throw new GoogleWalletError("not found", 404);
+      },
+      async addMessageToGenericObject() {},
+    };
+    const result = await broadcast(
+      { db, baseUrl: "https://wc.test", cards, subscribers, apns: null, google: { api, issuerId: "iss" } },
+      cardId,
+      input,
+    );
+    expect((await subscribers.findBySerial(sub.serialNumber))?.status).toBe("removed");
+    expect(result.errors).toEqual([]);
   });
 
   it("works with no platform configured and warns past the Google daily limit", async () => {

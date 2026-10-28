@@ -6,6 +6,7 @@ import type { MessageInput } from "@/lib/cards/validation";
 import type { ApnsSender } from "@/lib/apple/apns";
 import type { GoogleWalletApi } from "@/lib/google/client";
 import { buildNotifyMessage, buildObjectPatch, objectId } from "@/lib/google/objects";
+import { GoogleWalletError } from "@/lib/google/client";
 import { mapWithConcurrency } from "@/lib/http/concurrency";
 
 /** Google only shows ~3 notifying messages per pass per 24h. */
@@ -85,6 +86,10 @@ export async function broadcast(
         await api.addMessageToGenericObject(id, buildNotifyMessage(input.title, input.body, messageId));
         return null;
       } catch (error) {
+        if (error instanceof GoogleWalletError && error.status === 404) {
+          await deps.subscribers.setStatus(sub.serialNumber, "removed");
+          return null;
+        }
         return error instanceof Error ? error.message : String(error);
       }
     });
