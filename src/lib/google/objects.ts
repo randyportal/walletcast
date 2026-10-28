@@ -3,6 +3,12 @@ import { latestMessageText } from "@/lib/apple/pass";
 import { cardUsesHero } from "@/lib/cards/design";
 import { GOOGLE_BARCODE_TYPES, resolveBarcode } from "@/lib/cards/barcode";
 import {
+  type HistoryMessage,
+  historyText,
+  normalizeContent,
+  visibleRecommendations,
+} from "@/lib/cards/content";
+import {
   effectiveGoogleCodeMode,
   GOOGLE_TYPE_ENUM,
   normalizeGoogleConfig,
@@ -46,8 +52,14 @@ export function objectId(issuerId: string, subscriber: Pick<Subscriber, "serialN
   return `${issuerId}.${subscriber.serialNumber.replace(/[^\w.-]/g, "_")}`;
 }
 
-export function imageUrl(baseUrl: string, card: Pick<Card, "id" | "updatedAt">, kind: "logo" | "icon" | "hero"): string {
-  return `${baseUrl}/api/cards/${card.id}/image/${kind}?v=${card.updatedAt.getTime()}`;
+export function imageUrl(
+  baseUrl: string,
+  card: Pick<Card, "id" | "updatedAt">,
+  kind: "logo" | "icon" | "hero",
+  size?: number,
+): string {
+  const sizeQuery = size ? `&size=${size}` : "";
+  return `${baseUrl}/api/cards/${card.id}/image/${kind}?v=${card.updatedAt.getTime()}${sizeQuery}`;
 }
 
 export function assetUrl(baseUrl: string, card: Pick<Card, "id">, assetId: string): string {
@@ -56,14 +68,6 @@ export function assetUrl(baseUrl: string, card: Pick<Card, "id">, assetId: strin
 
 function linkIconUrl(baseUrl: string, card: Pick<Card, "id" | "updatedAt">, key: string): string {
   return `${baseUrl}/api/cards/${card.id}/link-icon/${encodeURIComponent(key)}?v=${card.updatedAt.getTime()}`;
-}
-
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host.replace(/^www\./, "");
-  } catch {
-    return "";
-  }
 }
 
 function rowTemplate(fieldPath: string) {
@@ -80,8 +84,9 @@ function rowTemplate(fieldPath: string) {
 
 export function buildGenericClass(issuerId: string, card: Card) {
   const config = normalizeGoogleConfig(card.googleConfig);
+  const content = normalizeContent(card);
   const rows = [];
-  if (config.showLatest) rows.push(rowTemplate("object.textModulesData['latest']"));
+  if (content.config.latest.show) rows.push(rowTemplate("object.textModulesData['latest']"));
   if (config.showCustomFields) {
     for (const field of card.customFields.filter((f) => f.location === "front").slice(0, 2)) {
       rows.push(rowTemplate(`object.textModulesData['cf_${field.id}']`));
@@ -101,18 +106,34 @@ export function buildGenericClass(issuerId: string, card: Card) {
   };
 }
 
-export function buildGenericObject(issuerId: string, card: Card, subscriber: Subscriber, baseUrl: string) {
+export function buildGenericObject(
+  issuerId: string,
+  card: Card,
+  subscriber: Subscriber,
+  baseUrl: string,
+  history: HistoryMessage[] = [],
+) {
   return {
     id: objectId(issuerId, subscriber),
     classId: classId(issuerId, card),
     state: "ACTIVE",
-    ...buildObjectPatch(card, baseUrl),
+    ...buildObjectPatch(card, baseUrl, history),
   };
 }
 
-function textModules(card: Card, config: GoogleConfig) {
+function textModules(card: Card, config: GoogleConfig, history: HistoryMessage[]) {
+  const content = normalizeContent(card);
   const modules: { id: string; header: string; body: string }[] = [];
-  if (config.showLatest) modules.push({ id: "latest", header: "Último mensaje", body: latestMessageText(card) });
+  if (content.config.latest.show) {
+    modules.push({ id: "latest", header: card.latestLabel || "Último mensaje", body: latestMessageText(card) });
+  }
+  if (content.config.latest.showHistory && history.length > 0) {
+    modules.push({
+      id: "history",
+      header: content.config.latest.historyTitle,
+      body: historyText(history, content.config.latest.historyLimit).slice(0, 500),
+    });
+  }
   if (config.showDescription && card.description) modules.push({ id: "about", header: "Acerca de", body: card.description });
   if (config.showCustomFields) {
     for (const field of card.customFields) {
@@ -125,45 +146,38 @@ function textModules(card: Card, config: GoogleConfig) {
   return modules.slice(0, 10);
 }
 
-function valueModules(card: Card, config: GoogleConfig, baseUrl: string) {
+function recommendationModules(card: Card, baseUrl: string) {
+  const content = normalizeContent(card);
+  if (!content.config.recommendations.show) return [];
   const modules: Record<string, unknown>[] = [];
-  let index = 0;
-  const push = (header: string, body: string, uri: string, key: string, assetId: string | null) => {
-    const imageUri = assetId ? assetUrl(baseUrl, card, assetId) : linkIconUrl(baseUrl, card, key);
+  const links = visibleRecommendations(content.links);
+  links.forEach((link, index) => {
+    const imageUri = link.iconAssetId ? assetUrl(baseUrl, card, link.iconAssetId) : linkIconUrl(baseUrl, card, `link:${link.id}`);
     modules.push({
-      header: localized(header),
-      ...(body ? { body: localized(body) } : {}),
-      uri,
+      header: localized(link.label),
+      ...(link.subtitle ? { body: localized(link.subtitle) } : {}),
+      uri: link.url,
       image: {
         sourceUri: { uri: imageUri },
-        contentDescription: localized(header),
+        contentDescription: localized(link.label),
       },
-      sortIndex: index++,
+      sortIndex: index,
     });
-  };
-
-  if (card.websiteUrl) push("Sitio web", hostOf(card.websiteUrl), card.websiteUrl, "website", null);
-  if (card.contactUrl) push("Guardar contacto", hostOf(card.contactUrl), card.contactUrl, "contact", null);
-  for (const link of card.links) {
-    push(link.label, hostOf(link.url), link.url, `link:${link.id}`, link.iconAssetId ?? null);
-  }
-  for (const valueModule of config.valueModules) {
-    push(valueModule.header, valueModule.body, valueModule.url, `module:${valueModule.id}`, valueModule.imageKind === "asset" ? valueModule.assetId : null);
-  }
-  return modules.slice(0, 10);
+  });
+  return modules.slice(0, 15);
 }
 
 /**
- * Everything that can change after the pass was saved. PATCHed on every
- * broadcast and whenever the card design changes.
+ * Everything that can change after the pass was saved. Used when a card design
+ * changes; the caller PUTs this full object so removed fields are cleared.
  */
-export function buildObjectPatch(card: Card, baseUrl: string): GoogleObjectPatch {
+export function buildObjectPatch(card: Card, baseUrl: string, history: HistoryMessage[] = []): GoogleObjectPatch {
   const config = normalizeGoogleConfig(card.googleConfig);
   const hero = cardUsesHero(card);
   const mode = effectiveGoogleCodeMode(card);
   const barcodeCode = mode === "code" ? resolveBarcode(card, baseUrl) : null;
   const textCode = mode === "text" ? config.code.text : "";
-  const modules = valueModules(card, config, baseUrl);
+  const modules = recommendationModules(card, baseUrl);
   const imageModule = config.imageModule?.assetId
     ? [
         {
@@ -182,7 +196,7 @@ export function buildObjectPatch(card: Card, baseUrl: string): GoogleObjectPatch
     hexBackgroundColor: card.bgColor,
     ...(config.type !== "auto" ? { genericType: GOOGLE_TYPE_ENUM[config.type] } : {}),
     logo: {
-      sourceUri: { uri: imageUrl(baseUrl, card, "icon") },
+      sourceUri: { uri: imageUrl(baseUrl, card, "icon", 512) },
       contentDescription: localized(`${card.name} logo`),
     },
     ...(card.logo
@@ -218,12 +232,18 @@ export function buildObjectPatch(card: Card, baseUrl: string): GoogleObjectPatch
           },
         }
       : {}),
-    textModulesData: textModules(card, config),
+    textModulesData: textModules(card, config, history),
     ...(modules.length > 0 ? { valueAddedModuleData: modules } : {}),
     // Clear the legacy links module so old passes stop showing the default globe icons.
     linksModuleData: { uris: [] },
     ...(imageModule.length > 0 ? { imageModulesData: imageModule } : {}),
   };
+}
+
+/** Minimal patch for broadcasts: only the modules whose text changes. */
+export function buildMessagePatch(card: Card, history: HistoryMessage[] = []) {
+  const config = normalizeGoogleConfig(card.googleConfig);
+  return { textModulesData: textModules(card, config, history) };
 }
 
 export function buildNotifyMessage(title: string, body: string, id: string) {

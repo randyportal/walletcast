@@ -63,13 +63,19 @@ export type BarcodeContent = (typeof BARCODE_CONTENTS)[number];
 export const FIELD_LOCATIONS = ["front", "back"] as const;
 export type FieldLocation = (typeof FIELD_LOCATIONS)[number];
 
+export const RECOMMENDATION_KINDS = ["custom", "website", "contact"] as const;
+export type RecommendationKind = (typeof RECOMMENDATION_KINDS)[number];
+
 export interface CardLink {
   id: string;
   label: string;
+  subtitle: string;
   url: string;
   icon: LinkIcon;
   style: LinkStyle;
-  iconAssetId?: string | null;
+  iconAssetId: string | null;
+  kind: RecommendationKind;
+  visible: boolean;
 }
 
 export interface CardField {
@@ -99,12 +105,15 @@ function allowedLink(value: string): boolean {
 }
 
 export const CardLinkSchema = z.object({
-  id: z.string().min(1).max(20),
-  label: z.string().trim().min(1, "La etiqueta es obligatoria").max(24),
+  id: z.string().min(1).max(40),
+  label: z.string().trim().min(1, "La etiqueta es obligatoria").max(60),
+  subtitle: z.string().trim().max(50, "Máximo 50 caracteres").default(""),
   url: z.string().trim().min(1, "La URL es obligatoria").max(500).refine(allowedLink, "Usa un enlace http(s), mailto o tel"),
   icon: z.enum(LINK_ICONS).default("link"),
   style: z.enum(LINK_STYLES).default("secondary"),
   iconAssetId: z.string().min(1).max(64).nullable().default(null),
+  kind: z.enum(RECOMMENDATION_KINDS).default("custom"),
+  visible: z.boolean().default(true),
 });
 
 export const CardFieldSchema = z.object({
@@ -121,7 +130,7 @@ export const LinksSchema = z.preprocess((v) => {
   } catch {
     return v;
   }
-}, z.array(CardLinkSchema).max(6, "Máximo 6 botones"));
+}, z.array(CardLinkSchema).max(12, "Máximo 12 recomendaciones"));
 
 export const CustomFieldsSchema = z.preprocess((v) => {
   if (typeof v !== "string" || v.trim() === "") return [];

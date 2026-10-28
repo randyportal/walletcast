@@ -6,6 +6,7 @@ import { cardUsesHero } from "@/lib/cards/design";
 import { APPLE_BARCODE_FORMATS, resolveBarcode } from "@/lib/cards/barcode";
 import { glowSlot, slotHue } from "@/lib/glow/hue";
 import { normalizeAppleConfig } from "@/lib/cards/apple";
+import { type HistoryMessage, historyText, normalizeContent, visibleRecommendations } from "@/lib/cards/content";
 
 export const APPLE_WEB_SERVICE_PATH = "/api/apple";
 export const LATEST_FIELD_KEY = "latest";
@@ -41,6 +42,8 @@ export interface BuildApplePassArgs {
   subscriber: Pick<Subscriber, "serialNumber" | "authToken">;
   apple: AppleConfig;
   baseUrl: string;
+  /** Previous messages, newest first. The latest message is rendered separately. */
+  history?: HistoryMessage[];
   /** Time zone whose hour picks the day-glow strip. */
   timeZone?: string;
   now?: Date;
@@ -52,10 +55,13 @@ export async function buildApplePass({
   subscriber,
   apple,
   baseUrl,
+  history = [],
   timeZone = "Europe/Rome",
   now = new Date(),
 }: BuildApplePassArgs): Promise<Buffer> {
   const appleConfig = normalizeAppleConfig(card.appleConfig);
+  const content = normalizeContent(card);
+  const recommendations = visibleRecommendations(content.links);
   const hero = cardUsesHero(card) || Boolean(card.appleImage);
   const style = hero ? "storeCard" : "generic";
   const barcode = resolveBarcode(card, baseUrl);
@@ -108,12 +114,14 @@ export async function buildApplePass({
     pass.headerFields.push({ key: "header", label: card.headerLabel.toUpperCase(), value: card.headerValue });
   }
   pass.primaryFields.push({ key: "name", label: (card.nameLabel || card.organizationName).toUpperCase(), value: card.name });
-  pass.secondaryFields.push({
-    key: LATEST_FIELD_KEY,
-    label: card.latestLabel,
-    value: latestMessageText(card),
-    changeMessage: "%@",
-  });
+  if (content.config.latest.show) {
+    pass.secondaryFields.push({
+      key: LATEST_FIELD_KEY,
+      label: card.latestLabel,
+      value: latestMessageText(card),
+      changeMessage: "%@",
+    });
+  }
   if (appleConfig.showCustomFields) {
     for (const field of card.customFields.filter((f) => f.location === "front").slice(0, 4)) {
       pass.auxiliaryFields.push({ key: `cf_${field.id}`, label: field.label.toUpperCase(), value: field.value });
@@ -121,11 +129,25 @@ export async function buildApplePass({
   }
 
   const back = [
-    { key: "latest_back", label: "Último mensaje", value: latestMessageText(card) },
+    !content.config.latest.show && {
+      key: LATEST_FIELD_KEY,
+      label: card.latestLabel || "Último mensaje",
+      value: latestMessageText(card),
+      changeMessage: "%@",
+    },
+    content.config.latest.showHistory && history.length > 0 && {
+      key: "history",
+      label: content.config.latest.historyTitle,
+      value: historyText(history, content.config.latest.historyLimit),
+    },
     appleConfig.showDescription && card.description && { key: "about", label: "Acerca de", value: card.description },
-    card.websiteUrl && { key: "website", label: "Sitio web", value: card.websiteUrl },
-    card.contactUrl && { key: "contact", label: "Guardar contacto", value: card.contactUrl },
-    ...card.links.map((link) => ({ key: `link_${link.id}`, label: link.label, value: link.url })),
+    ...(content.config.recommendations.show
+      ? recommendations.map((link) => ({
+          key: `link_${link.id}`,
+          label: link.subtitle ? `${link.label} - ${link.subtitle}` : link.label,
+          value: link.url,
+        }))
+      : []),
     ...(appleConfig.showCustomFields
       ? card.customFields
           .filter((f) => f.location === "back")

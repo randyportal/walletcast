@@ -49,6 +49,7 @@ describe("broadcast", () => {
     const googleCalls: string[] = [];
     const api: GoogleWalletApi = {
       async upsertGenericClass() {},
+      async updateGenericObject() {},
       async patchGenericObject(id) {
         googleCalls.push(`patch ${id}`);
         if (id.endsWith(g2.serialNumber)) throw new Error("boom");
@@ -84,6 +85,7 @@ describe("broadcast", () => {
     const sub = await subscribers.create({ cardId, platform: "google" });
     const api: GoogleWalletApi = {
       async upsertGenericClass() {},
+      async updateGenericObject() {},
       async patchGenericObject() {
         throw new GoogleWalletError("not found", 404);
       },
@@ -101,9 +103,9 @@ describe("broadcast", () => {
   it("works with no platform configured and warns past the Google daily limit", async () => {
     const deps = { db, baseUrl: "https://wc.test", cards, subscribers, apns: null, google: null };
     for (let i = 0; i < GOOGLE_DAILY_NOTIFICATION_LIMIT; i++) {
-      expect((await broadcast(deps, cardId, input)).warnings).toEqual([]);
+      expect((await broadcast(deps, cardId, { ...input, body: `${input.body} ${i}` })).warnings).toEqual([]);
     }
-    const last = await broadcast(deps, cardId, input);
+    const last = await broadcast(deps, cardId, { ...input, body: `${input.body} last` });
     expect(last.warnings[0]).toMatch(/Google Wallet/);
     expect(last.message.appleTargets).toBe(0);
     expect(await cards.listMessages(cardId, 10)).toHaveLength(GOOGLE_DAILY_NOTIFICATION_LIMIT + 1);

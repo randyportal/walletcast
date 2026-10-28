@@ -16,6 +16,7 @@ import { GooglePreview } from "@/components/GooglePreview";
 import { Glyph } from "@/components/icons";
 import { normalizeGoogleConfig } from "@/lib/cards/google";
 import { normalizeAppleConfig } from "@/lib/cards/apple";
+import { normalizeContent, previousMessages, visibleRecommendations } from "@/lib/cards/content";
 
 export async function generateMetadata({ params }: PageProps<"/c/[slug]">): Promise<Metadata> {
   const { slug } = await params;
@@ -36,6 +37,10 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
   const { config, cards } = await getServices();
   const card = await cards.findBySlug(slug);
   if (!card) notFound();
+  const content = normalizeContent(card);
+  const recent = await cards.listMessages(card.id, content.config.latest.historyLimit + 1);
+  const history = previousMessages(recent, card.latestMessage);
+  const recommendations = content.config.recommendations.show ? visibleRecommendations(content.links) : [];
 
   const os = userAgent({ headers: await headers() }).os.name ?? "";
   const isAndroid = /android/i.test(os);
@@ -63,6 +68,7 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
     <GooglePreview
       organizationName={card.organizationName}
       name={card.name}
+      latestLabel={card.latestLabel}
       description={card.description}
       message={latestMessageText(card)}
       websiteUrl={card.websiteUrl ?? undefined}
@@ -85,7 +91,9 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
       qrUrl={`/api/cards/${card.id}/qr?src=pass`}
       glowHue={card.dayGlow ? slotHue(glowSlot(new Date(), config.glowTimeZone)) : null}
       googleConfig={normalizeGoogleConfig(card.googleConfig)}
-      links={minimal ? [] : card.links}
+      contentConfig={content.config}
+      history={history}
+      links={minimal ? [] : recommendations}
       customFields={card.customFields}
       cardId={card.id}
     />
@@ -119,10 +127,13 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
       barcode={card.barcode}
       barcodeType={card.barcodeType}
       customFields={card.customFields}
-      links={minimal ? [] : card.links}
+      links={minimal ? [] : recommendations}
       qrUrl={`/api/cards/${card.id}/qr?src=pass`}
       glowHue={card.dayGlow ? slotHue(glowSlot(new Date(), config.glowTimeZone)) : null}
       appleConfig={normalizeAppleConfig(card.appleConfig)}
+      contentConfig={content.config}
+      history={history}
+      cardId={card.id}
       appleImageUrl={card.appleImage ? `/api/cards/${card.id}/image/apple-image?v=${card.updatedAt.getTime()}` : null}
     />
   );
@@ -189,28 +200,17 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
             </div>
 
             {buttons.length === 0 ? (
-              <div className="space-y-3">
-                {card.contactUrl && (
-                  <a href={card.contactUrl} className="block w-full rounded-lg px-4 py-3 text-center text-base" style={{ background: card.accentColor, color: accentText(card.accentColor) }}>
-                    Guardar contacto
-                  </a>
-                )}
-                {card.websiteUrl && (
-                  <a href={card.websiteUrl} className="block w-full rounded-lg border border-current px-4 py-3 text-center text-base" style={{ color: card.accentColor }}>
-                    Website
-                  </a>
-                )}
-                {!card.contactUrl && !card.websiteUrl && card.links.length === 0 && (
-                  <p className="panel text-center text-sm" style={{ color: card.labelColor }}>Esta tarjeta aún no está disponible.</p>
-                )}
-              </div>
+              recommendations.length === 0 ? (
+                <p className="panel text-center text-sm" style={{ color: card.labelColor }}>Esta tarjeta aún no está disponible.</p>
+              ) : null
             ) : (
               addButtons
             )}
 
-            {card.links.length > 0 && (
+            {recommendations.length > 0 && (
               <div className="space-y-2">
-                {card.links.map((link) => (
+                <p className="text-xs font-medium" style={{ color: card.labelColor }}>{content.config.recommendations.title}</p>
+                {recommendations.map((link) => (
                   <a
                     key={link.id}
                     href={link.url}
@@ -223,8 +223,16 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
                           : { border: "1px solid currentColor", color: card.fgColor }
                     }
                   >
-                    <Glyph path={LINK_ICON_PATHS[link.icon]} size={18} />
-                    <span>{link.label}</span>
+                    {link.iconAssetId ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={`/api/cards/${card.id}/asset/${link.iconAssetId}`} alt="" className="h-5 w-5 rounded-full object-cover" />
+                    ) : (
+                      <Glyph path={LINK_ICON_PATHS[link.icon]} size={18} />
+                    )}
+                    <span className="min-w-0">
+                      <span className="block truncate">{link.label}</span>
+                      {link.subtitle && <span className="block truncate text-xs opacity-80">{link.subtitle}</span>}
+                    </span>
                   </a>
                 ))}
               </div>

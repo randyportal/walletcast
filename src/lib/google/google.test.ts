@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { GoogleConfig } from "@/lib/config/env";
 import type { Card, Subscriber } from "@/lib/db/schema";
 import { DEFAULT_GOOGLE_CONFIG } from "@/lib/cards/google";
+import { DEFAULT_CONTENT_CONFIG } from "@/lib/cards/content";
 import { createGoogleWalletApi, createSaveUrl, GoogleWalletError, WALLET_API } from "./client";
 import {
   buildGenericClass,
@@ -86,8 +87,8 @@ describe("google object mapping", () => {
   it("maps a card to a generic object", () => {
     const obj = buildGenericObject(google.issuerId, card, subscriber, "https://wc.test");
     expect(obj.classId).toBe(classId(google.issuerId, card));
-    expect(obj.textModulesData[0]).toEqual({ id: "latest", header: "Último mensaje", body: "Welcome!" });
-    expect(obj.logo.sourceUri.uri).toBe(`https://wc.test/api/cards/${card.id}/image/icon?v=1000`);
+    expect(obj.textModulesData[0]).toEqual({ id: "latest", header: "LATEST", body: "Welcome!" });
+    expect(obj.logo.sourceUri.uri).toBe(`https://wc.test/api/cards/${card.id}/image/icon?v=1000&size=512`);
     expect(obj).not.toHaveProperty("wideLogo");
     expect(obj.linksModuleData).toEqual({ uris: [] });
     expect(obj.valueAddedModuleData).toHaveLength(1);
@@ -122,7 +123,7 @@ describe("google object mapping", () => {
       {
         ...card,
         backgroundType: "linear",
-        links: [{ id: "l1", label: "Menu", url: "https://menu.example", icon: "bag", style: "primary", iconAssetId: null }],
+        links: [{ id: "l1", label: "Menu", subtitle: "", url: "https://menu.example", icon: "bag", style: "primary", iconAssetId: null, kind: "custom", visible: true }],
         customFields: [{ id: "f1", label: "Phone", value: "555 0100", location: "back" }],
       },
       "https://wc.test",
@@ -196,21 +197,57 @@ describe("google object mapping", () => {
     expect(patch.imageModulesData[0].mainImage.sourceUri.uri).toBe(`https://wc.test/api/cards/${card.id}/asset/asset-1`);
   });
 
-  it("clears old link modules and caps value modules at ten", () => {
+  it("clears old link modules and keeps all recommendations", () => {
     const manyLinks = Array.from({ length: 12 }, (_, index) => ({
       id: `l${index}`,
       label: `Link ${index}`,
+      subtitle: "",
       url: `https://example.com/${index}`,
       icon: "link" as const,
       style: "secondary" as const,
       iconAssetId: null,
+      kind: "custom" as const,
+      visible: true,
     }));
-    const patch = buildObjectPatch({ ...card, links: manyLinks }, "https://wc.test") as unknown as {
+    const patch = buildObjectPatch({ ...card, websiteUrl: null, links: manyLinks }, "https://wc.test") as unknown as {
       linksModuleData: { uris: unknown[] };
       valueAddedModuleData: unknown[];
     };
     expect(patch.linksModuleData).toEqual({ uris: [] });
-    expect(patch.valueAddedModuleData).toHaveLength(10);
+    expect(patch.valueAddedModuleData).toHaveLength(12);
+  });
+
+  it("hides the latest module, adds history and omits hidden recommendations", () => {
+    const history = [
+      { title: "Anterior", body: "Mensaje anterior", createdAt: new Date("2026-10-09T10:00:00Z") },
+    ];
+    const patch = buildObjectPatch(
+      {
+        ...card,
+        websiteUrl: null,
+        barcode: false,
+        googleConfig: { ...DEFAULT_GOOGLE_CONFIG, code: { mode: "code", text: "" } },
+        contentConfig: {
+          version: 2,
+          latest: { show: false, showHistory: true, historyTitle: "Historial", historyLimit: 5 },
+          recommendations: { show: true, title: "Recomendaciones" },
+        },
+        links: [
+          { id: "visible", label: "Visible", subtitle: "Sí", url: "https://visible.example", icon: "star", style: "secondary", iconAssetId: null, kind: "custom", visible: true },
+          { id: "hidden", label: "Oculta", subtitle: "", url: "https://hidden.example", icon: "star", style: "secondary", iconAssetId: null, kind: "custom", visible: false },
+        ],
+      },
+      "https://wc.test",
+      history,
+    ) as unknown as {
+      barcode?: unknown;
+      textModulesData: { id: string; header: string }[];
+      valueAddedModuleData: { header: { defaultValue: { value: string } } }[];
+    };
+    expect(patch.barcode).toBeUndefined();
+    expect(patch.textModulesData.map((module) => module.id)).not.toContain("latest");
+    expect(patch.textModulesData).toContainEqual(expect.objectContaining({ id: "history", header: "Historial" }));
+    expect(patch.valueAddedModuleData.map((module) => module.header.defaultValue.value)).toEqual(["Visible"]);
   });
 
   it("builds front rows from custom fields", () => {
@@ -221,7 +258,7 @@ describe("google object mapping", () => {
     expect(classObj.classTemplateInfo.cardTemplateOverride.cardRowTemplateInfos).toHaveLength(2);
     const onlyFront = buildGenericClass(google.issuerId, {
       ...withFront,
-      googleConfig: { ...DEFAULT_GOOGLE_CONFIG, showLatest: false },
+      contentConfig: { ...DEFAULT_CONTENT_CONFIG, latest: { ...DEFAULT_CONTENT_CONFIG.latest, show: false } },
     }) as unknown as { classTemplateInfo: { cardTemplateOverride: { cardRowTemplateInfos: unknown[] } } };
     expect(onlyFront.classTemplateInfo.cardTemplateOverride.cardRowTemplateInfos).toHaveLength(1);
   });
@@ -254,6 +291,12 @@ describe("google wallet api", () => {
     const { calls, fetchFn } = fakeFetch({});
     await createGoogleWalletApi(google, { fetch: fetchFn, getAccessToken }).upsertGenericClass({ id: "c1" });
     expect(calls.map((c) => c.method)).toEqual(["GET", "PUT"]);
+  });
+
+  it("replaces an object with PUT when the design changes", async () => {
+    const { calls, fetchFn } = fakeFetch({});
+    await createGoogleWalletApi(google, { fetch: fetchFn, getAccessToken }).updateGenericObject("i.o1", { id: "i.o1" });
+    expect(calls.map((c) => `${c.method} ${c.url.replace(WALLET_API, "")}`)).toEqual(["PUT /genericObject/i.o1"]);
   });
 
   it("patches objects and adds messages", async () => {

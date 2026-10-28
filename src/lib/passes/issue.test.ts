@@ -13,10 +13,9 @@ const baseConfig = parseConfig({ BASE_URL: "https://wc.test", SESSION_SECRET: "x
 
 async function setup() {
   const db = await createTestDb();
-  const card = await createCardRepository(db).create(
-    CardInputSchema.parse({ name: "Lu", organizationName: "Lu", slug: "lu" }),
-  );
-  return { card, subscribers: createSubscriberRepository(db) };
+  const cards = createCardRepository(db);
+  const card = await cards.create(CardInputSchema.parse({ name: "Lu", organizationName: "Lu", slug: "lu" }));
+  return { card, cards, subscribers: createSubscriberRepository(db) };
 }
 
 describe("IssueRequestSchema", () => {
@@ -31,23 +30,23 @@ describe("IssueRequestSchema", () => {
 
 describe("issuing passes", () => {
   it("refuses platforms that are not configured", async () => {
-    const { card, subscribers } = await setup();
+    const { card, cards, subscribers } = await setup();
     const req = { email: null, src: null };
-    await expect(issueApplePass(baseConfig, subscribers, card, req)).rejects.toBeInstanceOf(PlatformDisabledError);
+    await expect(issueApplePass(baseConfig, cards, subscribers, card, req)).rejects.toBeInstanceOf(PlatformDisabledError);
     const api = {} as GoogleWalletApi;
-    await expect(issueGooglePass(baseConfig, subscribers, api, card, req)).rejects.toBeInstanceOf(PlatformDisabledError);
+    await expect(issueGooglePass(baseConfig, cards, subscribers, api, card, req)).rejects.toBeInstanceOf(PlatformDisabledError);
   });
 
   it("creates an Apple subscriber and returns a pkpass", async () => {
-    const { card, subscribers } = await setup();
+    const { card, cards, subscribers } = await setup();
     const config = { ...baseConfig, apple: testAppleConfig() };
-    const pkpass = await issueApplePass(config, subscribers, card, { email: "a@b.co", src: "door" });
+    const pkpass = await issueApplePass(config, cards, subscribers, card, { email: "a@b.co", src: "door" });
     expect(pkpass.subarray(0, 2).toString()).toBe("PK");
     expect(await subscribers.countBySource(card.id)).toEqual([expect.objectContaining({ source: "door" })]);
   });
 
   it("upserts the Google class and returns a save link", async () => {
-    const { card, subscribers } = await setup();
+    const { card, cards, subscribers } = await setup();
     const { privateKey } = generateKeyPairSync("rsa", {
       modulusLength: 2048,
       privateKeyEncoding: { type: "pkcs8", format: "pem" },
@@ -63,9 +62,10 @@ describe("issuing passes", () => {
         classes.push(c.id);
       },
       async patchGenericObject() {},
+      async updateGenericObject() {},
       async addMessageToGenericObject() {},
     };
-    const url = await issueGooglePass(config, subscribers, api, card, { email: null, src: null });
+    const url = await issueGooglePass(config, cards, subscribers, api, card, { email: null, src: null });
     expect(url).toMatch(/^https:\/\/pay\.google\.com\/gp\/v\/save\//);
     expect(classes).toHaveLength(1);
     expect(await subscribers.listActiveGoogle(card.id)).toHaveLength(1);

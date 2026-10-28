@@ -25,6 +25,7 @@ import {
   type GooglePassType,
 } from "@/lib/cards/google";
 import { DEFAULT_APPLE_CONFIG, type AppleConfig } from "@/lib/cards/apple";
+import { DEFAULT_CONTENT_CONFIG, type ContentConfig } from "@/lib/cards/content";
 import { ICON_PATHS, LINK_ICON_PATHS } from "@/lib/cards/icon-paths";
 import { PassPreview } from "./PassPreview";
 import { GooglePreview } from "./GooglePreview";
@@ -67,6 +68,7 @@ export interface CardFormValues {
   customFields: CardField[];
   googleConfig: GoogleConfig;
   appleConfig: AppleConfig;
+  contentConfig: ContentConfig;
   publicPageMode: string;
   askEmail: boolean;
 }
@@ -108,6 +110,7 @@ const DEFAULTS: CardFormValues = {
   customFields: [],
   googleConfig: DEFAULT_GOOGLE_CONFIG,
   appleConfig: DEFAULT_APPLE_CONFIG,
+  contentConfig: DEFAULT_CONTENT_CONFIG,
   publicPageMode: "full",
   askEmail: true,
 };
@@ -165,12 +168,45 @@ const LINK_STYLE_LABELS: Record<string, string> = {
   outline: "Contorno",
 };
 
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function IconPicker({ value, onChange }: { value: LinkIcon; onChange: (icon: LinkIcon) => void }) {
+  return (
+    <details className="relative">
+      <summary className="btn-secondary cursor-pointer px-2 py-1 text-xs">
+        <Glyph path={LINK_ICON_PATHS[value]} size={14} /> Icono
+      </summary>
+      <div className="mt-2 grid grid-cols-9 gap-1 rounded-lg border border-border bg-surface p-2">
+        {LINK_ICONS.map((icon) => (
+          <button
+            key={icon}
+            type="button"
+            title={LINK_ICON_LABELS[icon] ?? icon}
+            className={`flex h-7 w-7 items-center justify-center rounded ${value === icon ? "bg-accent text-accent-foreground" : "text-muted hover:text-foreground"}`}
+            onClick={() => onChange(icon)}
+          >
+            <Glyph path={LINK_ICON_PATHS[icon]} size={14} />
+          </button>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 const TABS = [
   { id: "content", label: "Contenido" },
   { id: "design", label: "Diseño" },
   { id: "code", label: "Código / QR" },
+  { id: "recommendations", label: "Recomendaciones" },
   { id: "google", label: "Google Wallet" },
   { id: "apple", label: "Apple Wallet" },
+  { id: "messages", label: "Mensajes" },
   { id: "public", label: "Página pública" },
   { id: "advanced", label: "Avanzado" },
 ] as const;
@@ -245,8 +281,9 @@ export function CardForm(props: Props) {
   const [values, setValues] = useState<CardFormValues>({
     ...DEFAULTS,
     ...initial,
-    googleConfig: { ...DEFAULT_GOOGLE_CONFIG, ...(initial?.googleConfig ?? {}) },
+    googleConfig: { ...DEFAULT_GOOGLE_CONFIG, ...(initial?.googleConfig ?? {}), valueModules: [] },
     appleConfig: { ...DEFAULT_APPLE_CONFIG, ...(initial?.appleConfig ?? {}) },
+    contentConfig: { ...DEFAULT_CONTENT_CONFIG, ...(initial?.contentConfig ?? {}) },
   });
   const [tab, setTab] = useState<Tab>("content");
   const [slugTouched, setSlugTouched] = useState(Boolean(initial?.slug));
@@ -258,9 +295,7 @@ export function CardForm(props: Props) {
   const [appleImageFile, setAppleImageFile] = useState<File | null>(null);
   const [imageModuleFile, setImageModuleFile] = useState<File | null>(null);
   const [linkIconFiles, setLinkIconFiles] = useState<Record<string, File>>({});
-  const [valueImageFiles, setValueImageFiles] = useState<Record<string, File>>({});
   const [removedLinkIcons, setRemovedLinkIcons] = useState<Record<string, boolean>>({});
-  const [removedValueImages, setRemovedValueImages] = useState<Record<string, boolean>>({});
   const [removeLogo, setRemoveLogo] = useState(false);
   const [removeIcon, setRemoveIcon] = useState(false);
   const [removeBackground, setRemoveBackground] = useState(false);
@@ -274,7 +309,6 @@ export function CardForm(props: Props) {
   const appleImagePreview = useObjectUrl(appleImageFile);
   const imageModulePreview = useObjectUrl(imageModuleFile);
   const linkIconPreviews = useFilePreviews(linkIconFiles);
-  const valueImagePreviews = useFilePreviews(valueImageFiles);
 
   const update = (patch: Partial<CardFormValues>) => setValues((prev) => ({ ...prev, ...patch }));
   const google = values.googleConfig;
@@ -296,7 +330,9 @@ export function CardForm(props: Props) {
   const isImage = values.backgroundType === "image";
   const lowContrast = contrastRatio(values.fgColor, values.bgColor) < 4.5;
 
-  const addLink = () => update({ links: [...values.links, { id: uid(), label: "", url: "https://", icon: "link", style: "secondary", iconAssetId: null }] });
+  const addLink = () => update({
+    links: [...values.links, { id: uid(), label: "", subtitle: "", url: "https://", icon: "link", style: "secondary", iconAssetId: null, kind: "custom", visible: true }],
+  });
   const patchLink = (id: string, patch: Partial<CardLink>) => update({ links: values.links.map((l) => (l.id === id ? { ...l, ...patch } : l)) });
   const removeLink = (id: string) => update({ links: values.links.filter((l) => l.id !== id) });
   const moveLink = (id: string, dir: -1 | 1) => {
@@ -312,18 +348,54 @@ export function CardForm(props: Props) {
   const patchField = (id: string, patch: Partial<CardField>) => update({ customFields: values.customFields.map((f) => (f.id === id ? { ...f, ...patch } : f)) });
   const removeField = (id: string) => update({ customFields: values.customFields.filter((f) => f.id !== id) });
 
+  const setLinkUrl = (id: string, url: string) => {
+    const link = values.links.find((item) => item.id === id);
+    update({
+      ...(link?.kind === "website" ? { websiteUrl: url } : link?.kind === "contact" ? { contactUrl: url } : {}),
+      links: values.links.map((item) => (item.id === id ? { ...item, url, ...(item.kind === "website" ? { subtitle: hostOf(url) } : {}) } : item)),
+    });
+  };
+
+  const upsertSpecialLink = (kind: "website" | "contact", enabled: boolean) => {
+    if (!enabled) {
+      update({ links: values.links.filter((link) => link.kind !== kind) });
+      return;
+    }
+    if (values.links.some((link) => link.kind === kind)) return;
+    const url = kind === "website" ? values.websiteUrl : values.contactUrl;
+    const link = {
+      id: kind,
+      label: kind === "website" ? "Sitio web" : "Guardar contacto",
+      subtitle: kind === "website" ? hostOf(url) : "Agrega nuestros datos a tu teléfono",
+      url: url || "https://",
+      icon: (kind === "website" ? "globe" : "contact") as LinkIcon,
+      style: "secondary" as const,
+      iconAssetId: null,
+      kind,
+      visible: true,
+    };
+    update({ links: [...values.links, link] });
+  };
+
+  const setLatest = (patch: Partial<ContentConfig["latest"]>) =>
+    update({ contentConfig: { ...values.contentConfig, latest: { ...values.contentConfig.latest, ...patch } } });
+  const setRecommendations = (patch: Partial<ContentConfig["recommendations"]>) =>
+    update({ contentConfig: { ...values.contentConfig, recommendations: { ...values.contentConfig.recommendations, ...patch } } });
+  const setWebsiteUrl = (value: string) =>
+    update({
+      websiteUrl: value,
+      links: values.links.map((link) => (link.kind === "website" ? { ...link, url: value, subtitle: hostOf(value) } : link)),
+    });
+  const setContactUrl = (value: string) =>
+    update({
+      contactUrl: value,
+      links: values.links.map((link) => (link.kind === "contact" ? { ...link, url: value } : link)),
+    });
+
   const addTextModule = () => setGoogle({ textModules: [...google.textModules, { id: uid(), header: "", body: "" }] });
   const patchTextModule = (id: string, patch: Partial<{ header: string; body: string }>) =>
     setGoogle({ textModules: google.textModules.map((m) => (m.id === id ? { ...m, ...patch } : m)) });
   const removeTextModule = (id: string) => setGoogle({ textModules: google.textModules.filter((m) => m.id !== id) });
-
-  const addValueModule = () =>
-    setGoogle({
-      valueModules: [...google.valueModules, { id: uid(), header: "", body: "", url: "https://", imageKind: "preset", icon: "link", assetId: null }],
-    });
-  const patchValueModule = (id: string, patch: Partial<GoogleConfig["valueModules"][number]>) =>
-    setGoogle({ valueModules: google.valueModules.map((m) => (m.id === id ? { ...m, ...patch } : m)) });
-  const removeValueModule = (id: string) => setGoogle({ valueModules: google.valueModules.filter((m) => m.id !== id) });
 
   const addAppleTextModule = () => setApple({ textModules: [...apple.textModules, { id: uid(), header: "", body: "" }] });
   const patchAppleTextModule = (id: string, patch: Partial<{ header: string; body: string }>) =>
@@ -385,20 +457,15 @@ export function CardForm(props: Props) {
             <div className="grid gap-5 sm:grid-cols-2">
               <label className="block">
                 <span className="field-label">Sitio web</span>
-                <input name="websiteUrl" type="url" className="input" placeholder="https://" value={values.websiteUrl} onChange={set("websiteUrl")} />
+                <input name="websiteUrl" type="url" className="input" placeholder="https://" value={values.websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} />
                 {err("websiteUrl")}
               </label>
               <label className="block">
                 <span className="field-label">Archivo de contacto (vCard)</span>
-                <input name="contactUrl" type="url" className="input" placeholder="https://" value={values.contactUrl} onChange={set("contactUrl")} />
+                <input name="contactUrl" type="url" className="input" placeholder="https://" value={values.contactUrl} onChange={(e) => setContactUrl(e.target.value)} />
                 {err("contactUrl")}
               </label>
             </div>
-            <label className="block">
-              <span className="field-label">Etiqueta del último mensaje</span>
-              <input name="latestLabel" className="input" maxLength={12} value={values.latestLabel} onChange={set("latestLabel")} />
-              {err("latestLabel")}
-            </label>
           </div>
         </section>
 
@@ -613,6 +680,125 @@ export function CardForm(props: Props) {
           </div>
         </section>
 
+        <section className={sectionClass("recommendations")}>
+          <h2 className="text-lg font-semibold">Recomendaciones</h2>
+          <div className="mt-4 space-y-4">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="field-label">Recomendaciones</span>
+                <button type="button" className="btn-secondary px-2 py-1 text-xs" data-testid="add-link" disabled={values.links.length >= 12} onClick={addLink}>Agregar recomendación</button>
+              </div>
+              <p className="field-hint">Se muestran en Google Wallet, en el reverso de Apple y en la página pública. Google admite hasta 15; aquí se limitan a 12 para mantener la tarjeta limpia.</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={values.links.some((link) => link.kind === "website")}
+                    disabled={!values.websiteUrl}
+                    onChange={(e) => upsertSpecialLink("website", e.target.checked)}
+                  />
+                  Incluir sitio web
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={values.links.some((link) => link.kind === "contact")}
+                    disabled={!values.contactUrl}
+                    onChange={(e) => upsertSpecialLink("contact", e.target.checked)}
+                  />
+                  Incluir guardar contacto
+                </label>
+              </div>
+              {!values.websiteUrl && <p className="field-hint">Agrega el sitio web en Contenido para poder incluirlo.</p>}
+              {!values.contactUrl && <p className="field-hint">Agrega el archivo de contacto en Contenido para poder incluirlo.</p>}
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={values.contentConfig.recommendations.show} onChange={(e) => setRecommendations({ show: e.target.checked })} />
+                  Mostrar recomendaciones
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  Título
+                  <input className="input max-w-48" maxLength={35} value={values.contentConfig.recommendations.title} onChange={(e) => setRecommendations({ title: e.target.value })} />
+                </label>
+              </div>
+              <div className="mt-3 space-y-3">
+                {values.links.map((link, i) => (
+                  <div key={link.id} className="space-y-2 rounded-lg border border-border p-2">
+                    <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                      <input data-testid="link-label" value={link.label} placeholder="Título" maxLength={60} className="input" onChange={(e) => patchLink(link.id, { label: e.target.value })} />
+                      <input
+                        data-testid="link-url"
+                        value={link.url}
+                        placeholder="https://"
+                        maxLength={500}
+                        className="input"
+                        onChange={(e) => setLinkUrl(link.id, e.target.value)}
+                      />
+                      <div className="flex items-center gap-1">
+                        <button type="button" className="btn-secondary px-2" disabled={i === 0} onClick={() => moveLink(link.id, -1)}>↑</button>
+                        <button type="button" className="btn-secondary px-2" disabled={i === values.links.length - 1} onClick={() => moveLink(link.id, 1)}>↓</button>
+                        <button type="button" className="btn-danger px-2" onClick={() => removeLink(link.id)}>×</button>
+                      </div>
+                    </div>
+                    <input value={link.subtitle} placeholder="Subtítulo corto (opcional)" maxLength={50} className="input" onChange={(e) => patchLink(link.id, { subtitle: e.target.value })} />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="flex items-center gap-2 text-xs">
+                        <input type="checkbox" checked={link.visible} onChange={(e) => patchLink(link.id, { visible: e.target.checked })} />
+                        Visible
+                      </label>
+                      {link.kind !== "custom" && <span className="badge">{link.kind === "website" ? "Sitio web" : "Contacto"}</span>}
+                      <IconPicker value={link.icon} onChange={(icon) => patchLink(link.id, { icon })} />
+                      <select className="input max-w-40" value={link.style} onChange={(e) => patchLink(link.id, { style: e.target.value as CardLink["style"] })}>
+                        {LINK_STYLES.map((s) => (
+                          <option key={s} value={s}>{LINK_STYLE_LABELS[s] ?? s}</option>
+                        ))}
+                      </select>
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: values.accentColor, color: contrastRatio(values.accentColor, "#000000") >= contrastRatio(values.accentColor, "#ffffff") ? "#000" : "#fff" }}>
+                        {linkIconPreviews[link.id] ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={linkIconPreviews[link.id]} alt="" className="h-8 w-8 rounded-full object-cover" />
+                        ) : link.iconAssetId && cardId ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={`/api/cards/${cardId}/asset/${link.iconAssetId}`} alt="" className="h-8 w-8 rounded-full object-cover" />
+                        ) : (
+                          <Glyph path={LINK_ICON_PATHS[link.icon]} size={16} />
+                        )}
+                      </span>
+                      <input
+                        type="file"
+                        name={`linkIcon:${link.id}`}
+                        accept="image/png,image/jpeg,image/webp"
+                        className="text-xs"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setLinkIconFiles((prev) => ({ ...prev, [link.id]: file }));
+                          setRemovedLinkIcons((prev) => ({ ...prev, [link.id]: false }));
+                        }}
+                      />
+                      {(link.iconAssetId || linkIconFiles[link.id]) && (
+                        <button
+                          type="button"
+                          className="text-xs text-danger"
+                          onClick={() => {
+                            setRemovedLinkIcons((prev) => ({ ...prev, [link.id]: true }));
+                            patchLink(link.id, { iconAssetId: null });
+                          }}
+                        >
+                          Usar preajuste
+                        </button>
+                      )}
+                    </div>
+                    {removedLinkIcons[link.id] && <input type="hidden" name={`removeLinkIcon:${link.id}`} value="on" />}
+                  </div>
+                ))}
+              </div>
+              {err("links")}
+            </div>
+
+          </div>
+        </section>
+
         <section className={sectionClass("google")}>
           <h2 className="text-lg font-semibold">Google Wallet</h2>
           <div className="mt-4 space-y-4">
@@ -670,14 +856,13 @@ export function CardForm(props: Props) {
 
             <div className="space-y-2">
               {[
-                ["showLatest", "Mostrar último mensaje"],
                 ["showDescription", "Mostrar descripción"],
                 ["showCustomFields", "Mostrar campos personalizados"],
               ].map(([key, label]) => (
                 <label key={key} className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={Boolean(google[key as "showLatest" | "showDescription" | "showCustomFields"])}
+                    checked={Boolean(google[key as "showDescription" | "showCustomFields"])}
                     onChange={(e) => setGoogle({ [key]: e.target.checked } as Partial<GoogleConfig>)}
                   />
                   {label}
@@ -696,72 +881,6 @@ export function CardForm(props: Props) {
                     <input className="input" placeholder="Encabezado" maxLength={35} value={textModule.header} onChange={(e) => patchTextModule(textModule.id, { header: e.target.value })} />
                     <input className="input" placeholder="Texto" maxLength={500} value={textModule.body} onChange={(e) => patchTextModule(textModule.id, { body: e.target.value })} />
                     <button type="button" className="btn-danger px-2" onClick={() => removeTextModule(textModule.id)}>×</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="field-label">Módulos con imagen y enlace</span>
-                <button type="button" className="btn-secondary px-2 py-1 text-xs" data-testid="add-value-module" onClick={addValueModule}>Agregar módulo</button>
-              </div>
-              <p className="field-hint">Google muestra hasta 10 módulos en total; los enlaces de la página pública también cuentan.</p>
-              <div className="mt-2 space-y-3">
-                {google.valueModules.map((valueModule) => (
-                  <div key={valueModule.id} className="space-y-2 rounded-lg border border-border p-2">
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <input className="input" placeholder="Encabezado" maxLength={60} value={valueModule.header} onChange={(e) => patchValueModule(valueModule.id, { header: e.target.value })} />
-                      <input className="input" placeholder="Texto (opcional)" maxLength={50} value={valueModule.body} onChange={(e) => patchValueModule(valueModule.id, { body: e.target.value })} />
-                    </div>
-                    <input className="input" placeholder="https://" value={valueModule.url} onChange={(e) => patchValueModule(valueModule.id, { url: e.target.value })} />
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <select className="input" value={valueModule.icon} onChange={(e) => patchValueModule(valueModule.id, { icon: e.target.value as LinkIcon, imageKind: "preset", assetId: null })}>
-                        {LINK_ICONS.map((icon) => (
-                          <option key={icon} value={icon}>{LINK_ICON_LABELS[icon] ?? icon}</option>
-                        ))}
-                      </select>
-                      <input
-                        type="file"
-                        name={`valueImage:${valueModule.id}`}
-                        accept="image/png,image/jpeg,image/webp"
-                        className="text-xs"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          setValueImageFiles((prev) => ({ ...prev, [valueModule.id]: file }));
-                          setRemovedValueImages((prev) => ({ ...prev, [valueModule.id]: false }));
-                          patchValueModule(valueModule.id, { imageKind: "asset" });
-                        }}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted">
-                      {valueImagePreviews[valueModule.id] ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={valueImagePreviews[valueModule.id]} alt="" className="h-8 w-8 rounded-full object-cover" />
-                      ) : valueModule.imageKind === "asset" && valueModule.assetId && cardId ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={`/api/cards/${cardId}/asset/${valueModule.assetId}`} alt="" className="h-8 w-8 rounded-full object-cover" />
-                      ) : (
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: values.accentColor }}>
-                          <Glyph path={LINK_ICON_PATHS[valueModule.icon]} size={16} />
-                        </span>
-                      )}
-                      {(valueModule.imageKind === "asset" || valueImageFiles[valueModule.id]) && (
-                        <button
-                          type="button"
-                          className="underline"
-                          onClick={() => {
-                            setRemovedValueImages((prev) => ({ ...prev, [valueModule.id]: true }));
-                            patchValueModule(valueModule.id, { imageKind: "preset", assetId: null });
-                          }}
-                        >
-                          Usar icono preajustado
-                        </button>
-                      )}
-                      <button type="button" className="ml-auto text-danger" onClick={() => removeValueModule(valueModule.id)}>Quitar módulo</button>
-                    </div>
-                    {removedValueImages[valueModule.id] && <input type="hidden" name={`removeValueImage:${valueModule.id}`} value="on" />}
                   </div>
                 ))}
               </div>
@@ -876,13 +995,49 @@ export function CardForm(props: Props) {
           </div>
         </section>
 
+        <section className={sectionClass("messages")}>
+          <h2 className="text-lg font-semibold">Mensajes</h2>
+          <div className="mt-4 space-y-4">
+            <label className="flex items-start gap-3 text-sm">
+              <input type="checkbox" className="mt-1" checked={values.contentConfig.latest.show} onChange={(e) => setLatest({ show: e.target.checked })} />
+              <span>
+                <span className="font-medium">Mostrar el último mensaje en la tarjeta principal</span>
+                <span className="block text-muted">Apple seguirá notificando aunque lo ocultes del frente. Google notifica con el mensaje, no con el módulo visible.</span>
+              </span>
+            </label>
+            <label className="block">
+              <span className="field-label">Etiqueta del último mensaje</span>
+              <input name="latestLabel" className="input" maxLength={12} value={values.latestLabel} onChange={set("latestLabel")} />
+              {err("latestLabel")}
+            </label>
+            <label className="flex items-start gap-3 text-sm">
+              <input type="checkbox" className="mt-1" checked={values.contentConfig.latest.showHistory} onChange={(e) => setLatest({ showHistory: e.target.checked })} />
+              <span>
+                <span className="font-medium">Permitir ver el historial desde la tarjeta</span>
+                <span className="block text-muted">Google lo muestra como módulo en el detalle; Apple en el reverso; la página pública en una sección desplegable.</span>
+              </span>
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="field-label">Título del historial</span>
+                <input className="input" maxLength={35} value={values.contentConfig.latest.historyTitle} onChange={(e) => setLatest({ historyTitle: e.target.value })} />
+              </label>
+              <label className="block">
+                <span className="field-label">Mensajes en el historial</span>
+                <input type="number" min={1} max={10} className="input" value={values.contentConfig.latest.historyLimit} onChange={(e) => setLatest({ historyLimit: Math.max(1, Math.min(10, Number(e.target.value) || 1)) })} />
+              </label>
+            </div>
+            <p className="field-hint">En la tarjeta principal solo se ve el último mensaje. El historial queda en una sección aparte.</p>
+          </div>
+        </section>
+
         <section className={sectionClass("public")}>
           <h2 className="text-lg font-semibold">Página pública</h2>
           <div className="mt-4 space-y-4">
             <label className="block">
               <span className="field-label">Estilo de la página pública</span>
               <select name="publicPageMode" className="input" value={values.publicPageMode} onChange={set("publicPageMode")}>
-                <option value="full">Completa (vista previa, descripción, botones y campos)</option>
+                <option value="full">Completa (vista previa, descripción, recomendaciones y campos)</option>
                 <option value="minimal">Mínima (vista previa + botón de agregar)</option>
               </select>
             </label>
@@ -909,80 +1064,6 @@ export function CardForm(props: Props) {
                 )}
               </div>
             </label>
-
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="field-label">Botones (hasta 6)</span>
-                <button type="button" className="btn-secondary px-2 py-1 text-xs" data-testid="add-link" onClick={addLink}>Agregar botón</button>
-              </div>
-              <p className="field-hint">Se muestran en la página pública y como módulos con icono en Google Wallet.</p>
-              <div className="mt-2 space-y-3">
-                {values.links.map((link, i) => (
-                  <div key={link.id} className="space-y-2 rounded-lg border border-border p-2">
-                    <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                      <input data-testid="link-label" value={link.label} placeholder="Etiqueta" maxLength={24} className="input" onChange={(e) => patchLink(link.id, { label: e.target.value })} />
-                      <input data-testid="link-url" value={link.url} placeholder="https://" maxLength={500} className="input" onChange={(e) => patchLink(link.id, { url: e.target.value })} />
-                      <div className="flex items-center gap-1">
-                        <button type="button" className="btn-secondary px-2" disabled={i === 0} onClick={() => moveLink(link.id, -1)}>↑</button>
-                        <button type="button" className="btn-secondary px-2" disabled={i === values.links.length - 1} onClick={() => moveLink(link.id, 1)}>↓</button>
-                        <button type="button" className="btn-danger px-2" onClick={() => removeLink(link.id)}>×</button>
-                      </div>
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1.4fr]">
-                      <select className="input" value={link.icon} onChange={(e) => patchLink(link.id, { icon: e.target.value as LinkIcon })}>
-                        {LINK_ICONS.map((ic) => (
-                          <option key={ic} value={ic}>{LINK_ICON_LABELS[ic] ?? ic}</option>
-                        ))}
-                      </select>
-                      <select className="input" value={link.style} onChange={(e) => patchLink(link.id, { style: e.target.value as CardLink["style"] })}>
-                        {LINK_STYLES.map((s) => (
-                          <option key={s} value={s}>{LINK_STYLE_LABELS[s] ?? s}</option>
-                        ))}
-                      </select>
-                      <div className="flex items-center gap-2">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: values.accentColor, color: contrastRatio(values.accentColor, "#000000") >= contrastRatio(values.accentColor, "#ffffff") ? "#000" : "#fff" }}>
-                          {linkIconPreviews[link.id] ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={linkIconPreviews[link.id]} alt="" className="h-8 w-8 rounded-full object-cover" />
-                          ) : link.iconAssetId && cardId ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={`/api/cards/${cardId}/asset/${link.iconAssetId}`} alt="" className="h-8 w-8 rounded-full object-cover" />
-                          ) : (
-                            <Glyph path={LINK_ICON_PATHS[link.icon]} size={16} />
-                          )}
-                        </span>
-                        <input
-                          type="file"
-                          name={`linkIcon:${link.id}`}
-                          accept="image/png,image/jpeg,image/webp"
-                          className="text-xs"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            setLinkIconFiles((prev) => ({ ...prev, [link.id]: file }));
-                            setRemovedLinkIcons((prev) => ({ ...prev, [link.id]: false }));
-                          }}
-                        />
-                        {(link.iconAssetId || linkIconFiles[link.id]) && (
-                          <button
-                            type="button"
-                            className="text-xs text-danger"
-                            onClick={() => {
-                              setRemovedLinkIcons((prev) => ({ ...prev, [link.id]: true }));
-                              patchLink(link.id, { iconAssetId: null });
-                            }}
-                          >
-                            Usar preajuste
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {removedLinkIcons[link.id] && <input type="hidden" name={`removeLinkIcon:${link.id}`} value="on" />}
-                  </div>
-                ))}
-              </div>
-              {err("links")}
-            </div>
 
             <div>
               <div className="flex items-center justify-between">
@@ -1024,6 +1105,7 @@ export function CardForm(props: Props) {
         <input type="hidden" name="customFields" value={JSON.stringify(values.customFields)} />
         <input type="hidden" name="googleConfig" value={JSON.stringify(values.googleConfig)} />
         <input type="hidden" name="appleConfig" value={JSON.stringify(values.appleConfig)} />
+        <input type="hidden" name="contentConfig" value={JSON.stringify(values.contentConfig)} />
         {!isGradient && <input type="hidden" name="bgColor2" value={values.bgColor2} />}
         {!isImage && <input type="hidden" name="backgroundOverlay" value={values.backgroundOverlay} />}
         {!isImage && <input type="hidden" name="backgroundPosition" value={values.backgroundPosition} />}
@@ -1050,6 +1132,7 @@ export function CardForm(props: Props) {
           <GooglePreview
             organizationName={values.organizationName}
             name={values.name}
+            latestLabel={values.latestLabel}
             description={values.description}
             message={latestMessage || values.welcomeText}
             websiteUrl={values.websiteUrl}
@@ -1072,7 +1155,8 @@ export function CardForm(props: Props) {
             qrUrl={qrUrl}
             glowHue={values.dayGlow ? glowHue : null}
             googleConfig={values.googleConfig}
-            links={values.links}
+            contentConfig={values.contentConfig}
+            links={values.contentConfig.recommendations.show ? values.links.filter((link) => link.visible) : []}
             customFields={values.customFields}
             cardId={cardId}
           />
@@ -1106,10 +1190,12 @@ export function CardForm(props: Props) {
             barcode={values.barcode}
             barcodeType={values.barcodeType}
             customFields={values.customFields}
-            links={values.links}
             qrUrl={qrUrl}
             glowHue={values.dayGlow ? glowHue : null}
             appleConfig={values.appleConfig}
+            contentConfig={values.contentConfig}
+            links={values.contentConfig.recommendations.show ? values.links.filter((link) => link.visible) : []}
+            cardId={cardId}
             appleImageUrl={appleImagePreview ?? (removeAppleImage ? null : existingAppleImageUrl)}
           />
         )}

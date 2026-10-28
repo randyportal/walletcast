@@ -198,6 +198,9 @@ export function normalizeGoogleConfig(raw: unknown): GoogleConfig {
 
 export function effectiveGoogleCodeMode(card: { barcode: boolean; googleConfig?: unknown }): GoogleCodeMode {
   const config = normalizeGoogleConfig(card.googleConfig);
-  if (config.code.mode !== "auto") return config.code.mode;
-  return card.barcode ? "code" : "hidden";
+  // The card-level QR switch is the master. Text does not need a barcode, but
+  // "code" can never force a QR when the master switch is off.
+  if (!card.barcode) return config.code.mode === "text" ? "text" : "hidden";
+  if (config.code.mode === "auto") return "code";
+  return config.code.mode;
 }

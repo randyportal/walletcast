@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getServices } from "@/lib/services";
 import { publicCardUrl } from "@/lib/cards/links";
+import { GOOGLE_DAILY_NOTIFICATION_LIMIT } from "@/lib/broadcast/broadcast";
 import { imageUrl } from "@/lib/google/objects";
 import { glowSlot, slotHue } from "@/lib/glow/hue";
 import { normalizeGoogleConfig } from "@/lib/cards/google";
 import { normalizeAppleConfig } from "@/lib/cards/apple";
+import { normalizeContent } from "@/lib/cards/content";
 import { CardForm } from "@/components/CardForm";
 import { SendForm } from "@/components/SendForm";
 import { QrPanel } from "@/components/QrPanel";
@@ -32,6 +34,10 @@ export default async function CardPage({ params, searchParams }: PageProps<"/das
   const apple = stats?.appleSubscribers ?? 0;
   const google = stats?.googleSubscribers ?? 0;
   const link = publicCardUrl(config.baseUrl, card.slug);
+  const content = normalizeContent(card);
+  const now = new Date();
+  const googleToday = await cards.countMessagesSince(card.id, new Date(now.getTime() - 24 * 3600_000));
+  const googleRemaining = Math.max(0, GOOGLE_DAILY_NOTIFICATION_LIMIT - googleToday);
 
   return (
     <div className="space-y-8">
@@ -60,7 +66,15 @@ export default async function CardPage({ params, searchParams }: PageProps<"/das
           <p className="mb-4 text-sm text-muted">
             Aparece en la pantalla de bloqueo de todos los que tienen la tarjeta y queda como el último mensaje.
           </p>
-          <SendForm action={sendMessageAction.bind(null, card.id)} subscriberCount={apple + google} />
+          <SendForm
+            action={sendMessageAction.bind(null, card.id)}
+            subscriberCount={apple + google}
+            organizationName={card.organizationName}
+            cardName={card.name}
+            iconUrl={`/api/cards/${card.id}/image/icon?v=${card.updatedAt.getTime()}`}
+            googleRemaining={googleRemaining}
+            lastMessage={card.latestMessage}
+          />
         </section>
 
         <section className="panel">
@@ -172,10 +186,11 @@ export default async function CardPage({ params, searchParams }: PageProps<"/das
             barcodeContent: card.barcodeContent,
             barcodeValue: card.barcodeValue ?? "",
             dayGlow: card.dayGlow,
-            links: card.links,
+            links: content.links,
             customFields: card.customFields,
-            googleConfig: normalizeGoogleConfig(card.googleConfig),
+            googleConfig: { ...normalizeGoogleConfig(card.googleConfig), valueModules: [] },
             appleConfig: normalizeAppleConfig(card.appleConfig),
+            contentConfig: content.config,
             publicPageMode: card.publicPageMode,
             askEmail: card.askEmail,
           }}

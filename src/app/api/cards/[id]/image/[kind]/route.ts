@@ -10,6 +10,8 @@ import { glowSlot, slotHue } from "@/lib/glow/hue";
  */
 export async function GET(request: NextRequest, ctx: RouteContext<"/api/cards/[id]/image/[kind]">) {
   const { id, kind } = await ctx.params;
+  const sizeParam = Number(request.nextUrl.searchParams.get("size") ?? "");
+  const iconSize = Number.isFinite(sizeParam) && sizeParam >= 64 && sizeParam <= 1024 ? Math.round(sizeParam) : undefined;
   const allowed = new Set(["logo", "icon", "hero", "favicon", "background", "apple-image"]);
   if (!allowed.has(kind)) return new Response("No encontrado", { status: 404 });
   const { config, cards } = await getServices();
@@ -22,7 +24,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/cards/[i
     return new Response(new Uint8Array(card.logo), { headers: { "content-type": "image/png", ...headers } });
   }
   if (kind === "icon") {
-    const icon = await renderCardIcon(card);
+    const icon = await renderCardIcon(card, iconSize ?? 87);
     return new Response(new Uint8Array(icon), { headers: { "content-type": "image/png", ...headers } });
   }
   if (kind === "hero") {

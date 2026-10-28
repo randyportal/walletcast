@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { AppConfig } from "@/lib/config/env";
 import type { Card } from "@/lib/db/schema";
 import type { SubscriberRepository } from "@/lib/subscribers/repository";
+import type { CardRepository } from "@/lib/cards/repository";
+import { normalizeContent, previousMessages } from "@/lib/cards/content";
 import { buildApplePass } from "@/lib/apple/pass";
 import { createSaveUrl, type GoogleWalletApi } from "@/lib/google/client";
 import { buildGenericClass, buildGenericObject } from "@/lib/google/objects";
@@ -36,11 +38,14 @@ export class PlatformDisabledError extends Error {
 
 export async function issueApplePass(
   config: AppConfig,
+  cards: CardRepository,
   subscribers: SubscriberRepository,
   card: Card,
   request: IssueRequest,
 ): Promise<Buffer> {
   if (!config.apple) throw new PlatformDisabledError("Apple Wallet");
+  const limit = normalizeContent(card).config.latest.historyLimit + 1;
+  const history = previousMessages(await cards.listMessages(card.id, limit), card.latestMessage);
   const subscriber = await subscribers.create({
     cardId: card.id,
     platform: "apple",
@@ -52,18 +57,22 @@ export async function issueApplePass(
     subscriber,
     apple: config.apple,
     baseUrl: config.baseUrl,
+    history,
     timeZone: config.glowTimeZone,
   });
 }
 
 export async function issueGooglePass(
   config: AppConfig,
+  cards: CardRepository,
   subscribers: SubscriberRepository,
   api: GoogleWalletApi,
   card: Card,
   request: IssueRequest,
 ): Promise<string> {
   if (!config.google) throw new PlatformDisabledError("Google Wallet");
+  const limit = normalizeContent(card).config.latest.historyLimit + 1;
+  const history = previousMessages(await cards.listMessages(card.id, limit), card.latestMessage);
   await api.upsertGenericClass(buildGenericClass(config.google.issuerId, card));
   const subscriber = await subscribers.create({
     cardId: card.id,
@@ -71,6 +80,6 @@ export async function issueGooglePass(
     email: request.email,
     source: request.src,
   });
-  const object = buildGenericObject(config.google.issuerId, card, subscriber, config.baseUrl);
+  const object = buildGenericObject(config.google.issuerId, card, subscriber, config.baseUrl, history);
   return createSaveUrl(config.google, object, config.baseUrl);
 }

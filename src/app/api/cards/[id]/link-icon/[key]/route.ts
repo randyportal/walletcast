@@ -3,6 +3,7 @@ import { getServices } from "@/lib/services";
 import { renderLinkIcon } from "@/lib/cards/images";
 import { contrastRatio, type LinkIcon } from "@/lib/cards/design";
 import { normalizeGoogleConfig } from "@/lib/cards/google";
+import { normalizeContent } from "@/lib/cards/content";
 
 /** Public 1:1 icon used by Google Wallet value-added modules. */
 export async function GET(_request: NextRequest, ctx: RouteContext<"/api/cards/[id]/link-icon/[key]">) {
@@ -18,7 +19,7 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/cards/[
   } else if (key === "contact") {
     icon = "contact";
   } else if (key.startsWith("link:")) {
-    const link = card.links.find((l) => l.id === key.slice(5));
+    const link = normalizeContent(card).links.find((l) => l.id === key.slice(5));
     if (!link) return new Response("No encontrado", { status: 404 });
     icon = link.icon;
     assetId = link.iconAssetId ?? null;

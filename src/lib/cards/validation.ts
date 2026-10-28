@@ -15,6 +15,7 @@ import {
 } from "./design";
 import { DEFAULT_GOOGLE_CONFIG, GoogleConfigInputSchema } from "./google";
 import { AppleConfigInputSchema, DEFAULT_APPLE_CONFIG } from "./apple";
+import { ContentConfigInputSchema, DEFAULT_CONTENT_CONFIG } from "./content";
 
 const checkbox = (defaultValue: boolean) =>
   z.preprocess((value) => {
@@ -82,6 +83,7 @@ export const CardInputSchema = z.object({
     .default(null),
   googleConfig: GoogleConfigInputSchema.default(DEFAULT_GOOGLE_CONFIG),
   appleConfig: AppleConfigInputSchema.default(DEFAULT_APPLE_CONFIG),
+  contentConfig: ContentConfigInputSchema.default(DEFAULT_CONTENT_CONFIG),
   publicPageMode: z.enum(["full", "minimal"]).default("full"),
   askEmail: checkbox(true),
 }).superRefine((input, ctx) => {

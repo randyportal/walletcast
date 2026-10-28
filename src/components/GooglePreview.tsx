@@ -8,12 +8,14 @@ import {
 } from "@/lib/cards/design";
 import { fontStack } from "@/lib/cards/fonts";
 import { normalizeGoogleConfig, type GoogleConfig } from "@/lib/cards/google";
+import { type ContentConfig, type HistoryMessage, historyText } from "@/lib/cards/content";
 import { LINK_ICON_PATHS } from "@/lib/cards/icon-paths";
 import { Glyph } from "./icons";
 
 export interface GooglePreviewProps {
   organizationName: string;
   name: string;
+  latestLabel?: string;
   description?: string;
   message: string;
   websiteUrl?: string;
@@ -36,6 +38,8 @@ export interface GooglePreviewProps {
   qrUrl?: string | null;
   glowHue?: number | null;
   googleConfig: GoogleConfig;
+  contentConfig: ContentConfig;
+  history?: HistoryMessage[];
   links: CardLink[];
   customFields: CardField[];
   cardId?: string;
@@ -90,32 +94,29 @@ export function GooglePreview(props: GooglePreviewProps) {
     backgroundPosition: props.backgroundPosition,
     backgroundImageUrl: props.backgroundImageUrl,
   });
-  const mode = config.code.mode === "auto" ? (props.barcode ? "code" : "hidden") : config.code.mode;
+  const mode = !props.barcode ? (config.code.mode === "text" ? "text" : "hidden") : config.code.mode === "auto" ? "code" : config.code.mode;
   const frontFields = (props.customFields ?? []).filter((f) => f.location === "front").slice(0, 2);
 
   const modules: { key: string; header: string; body: string; icon: LinkIcon; assetId?: string | null; url: string }[] = [];
-  if (props.websiteUrl) {
-    modules.push({ key: "website", header: "Sitio web", body: hostOf(props.websiteUrl), icon: "globe", url: props.websiteUrl });
-  }
-  if (props.contactUrl) {
-    modules.push({ key: "contact", header: "Guardar contacto", body: "", icon: "contact", url: props.contactUrl });
-  }
   for (const link of props.links) {
-    modules.push({ key: link.id, header: link.label || "Botón", body: hostOf(link.url), icon: link.icon, assetId: link.iconAssetId, url: link.url });
-  }
-  for (const valueModule of config.valueModules) {
     modules.push({
-      key: valueModule.id,
-      header: valueModule.header,
-      body: valueModule.body,
-      icon: valueModule.icon,
-      assetId: valueModule.imageKind === "asset" ? valueModule.assetId : null,
-      url: valueModule.url,
+      key: link.id,
+      header: link.label || "Recomendación",
+      body: link.subtitle || hostOf(link.url),
+      icon: link.icon,
+      assetId: link.iconAssetId,
+      url: link.url,
     });
   }
 
   const textModules: { header: string; body: string }[] = [];
-  if (config.showLatest) textModules.push({ header: "Último mensaje", body: props.message });
+  if (props.contentConfig.latest.show) textModules.push({ header: props.latestLabel || "Último mensaje", body: props.message });
+  if (props.contentConfig.latest.showHistory && (props.history?.length ?? 0) > 0) {
+    textModules.push({
+      header: props.contentConfig.latest.historyTitle,
+      body: historyText(props.history ?? [], props.contentConfig.latest.historyLimit).slice(0, 500),
+    });
+  }
   if (config.showDescription && props.description) textModules.push({ header: "Acerca de", body: props.description });
   if (config.showCustomFields) {
     for (const field of props.customFields ?? []) textModules.push({ header: field.label, body: field.value });
@@ -151,10 +152,10 @@ export function GooglePreview(props: GooglePreviewProps) {
           <div className="text-xl font-semibold">{props.name || "Nombre de la tarjeta"}</div>
         </div>
 
-        {config.showLatest && (
+        {props.contentConfig.latest.show && (
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: props.labelColor }}>
-              Latest
+              {props.latestLabel || "Último mensaje"}
             </div>
             <div className="text-sm">{props.message || "Sin mensajes todavía"}</div>
           </div>
@@ -187,6 +188,9 @@ export function GooglePreview(props: GooglePreviewProps) {
 
         {modules.length > 0 && (
           <div className="space-y-2">
+            <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: props.labelColor }}>
+              {props.contentConfig.recommendations.title}
+            </div>
             {modules.map((module) => (
               <div key={module.key} className="flex items-center gap-3 rounded-lg px-2 py-1.5" style={{ background: "rgba(127,127,127,0.12)" }}>
                 <ModuleIcon icon={module.icon} assetId={module.assetId} cardId={props.cardId} accent={props.accentColor} />

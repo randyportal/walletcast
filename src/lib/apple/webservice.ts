@@ -3,6 +3,7 @@ import type { AppleConfig } from "@/lib/config/env";
 import type { Card, Subscriber } from "@/lib/db/schema";
 import type { SubscriberRepository } from "@/lib/subscribers/repository";
 import type { CardRepository } from "@/lib/cards/repository";
+import { type HistoryMessage, normalizeContent, previousMessages } from "@/lib/cards/content";
 
 /**
  * Apple PassKit web service (https://developer.apple.com/documentation/walletpasses/adding-a-web-service-to-update-passes).
@@ -19,7 +20,7 @@ export interface AppleWebServiceDeps {
   apple: AppleConfig;
   subscribers: SubscriberRepository;
   cards: CardRepository;
-  buildPass: (card: Card, subscriber: Subscriber) => Promise<Buffer>;
+  buildPass: (card: Card, subscriber: Subscriber, history: HistoryMessage[]) => Promise<Buffer>;
   log?: (message: string) => void;
 }
 
@@ -128,7 +129,9 @@ export function createAppleWebService(deps: AppleWebServiceDeps) {
           return { status: 304 };
         }
       }
-      const pass = await deps.buildPass(card, subscriber);
+      const limit = normalizeContent(card).config.latest.historyLimit + 1;
+      const history = previousMessages(await cards.listMessages(card.id, limit), card.latestMessage);
+      const pass = await deps.buildPass(card, subscriber, history);
       return {
         status: 200,
         body: pass,

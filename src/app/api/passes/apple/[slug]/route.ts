@@ -18,7 +18,7 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/passes/
   if (!parsed.success) return publicError(request, slug, 400, "Correo electrónico inválido");
 
   try {
-    const pkpass = await issueApplePass(config, subscribers, card, parsed.data);
+    const pkpass = await issueApplePass(config, cards, subscribers, card, parsed.data);
     return new Response(new Uint8Array(pkpass), {
       headers: {
         "content-type": "application/vnd.apple.pkpass",

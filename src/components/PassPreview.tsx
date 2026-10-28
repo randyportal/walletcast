@@ -2,6 +2,7 @@ import { cardBackgroundStyle, cardUsesHero, contrastRatio, type CardField, type 
 import { fontStack } from "@/lib/cards/fonts";
 import { LINK_ICON_PATHS } from "@/lib/cards/icon-paths";
 import { normalizeAppleConfig, type AppleConfig } from "@/lib/cards/apple";
+import { DEFAULT_CONTENT_CONFIG, type ContentConfig, type HistoryMessage, historyText } from "@/lib/cards/content";
 import { Glyph } from "./icons";
 
 export interface PassPreviewProps {
@@ -37,7 +38,10 @@ export interface PassPreviewProps {
   qrUrl?: string | null;
   glowHue?: number | null;
   appleConfig?: AppleConfig;
+  contentConfig?: ContentConfig;
+  history?: HistoryMessage[];
   appleImageUrl?: string | null;
+  cardId?: string;
 }
 
 const hsl = (hue: number) => `hsl(${Math.round((((hue % 1) + 1) % 1) * 360)} 75% 66%)`;
@@ -69,6 +73,7 @@ function nameBlock(props: PassPreviewProps) {
 
 export function PassPreview(props: PassPreviewProps) {
   const apple = normalizeAppleConfig(props.appleConfig);
+  const content = props.contentConfig ?? DEFAULT_CONTENT_CONFIG;
   const hero = cardUsesHero({ dayGlow: props.glowHue != null, backgroundType: props.backgroundType });
   const heroStyle = cardBackgroundStyle(props);
   const font = fontStack(props.fontFamily);
@@ -76,10 +81,14 @@ export function PassPreview(props: PassPreviewProps) {
   const frontFields = apple.showCustomFields ? allFrontFields : [];
   const links = props.links ?? [];
   const backFields: { key: string; label: string; value: string }[] = [
+    ...(!content.latest.show ? [{ key: "latest", label: props.latestLabel || "Último mensaje", value: props.message }] : []),
+    ...(content.latest.showHistory && (props.history?.length ?? 0) > 0
+      ? [{ key: "history", label: content.latest.historyTitle, value: historyText(props.history ?? [], content.latest.historyLimit) }]
+      : []),
     ...(apple.showDescription && props.description ? [{ key: "about", label: "Acerca de", value: props.description }] : []),
-    ...(props.websiteUrl ? [{ key: "website", label: "Sitio web", value: props.websiteUrl }] : []),
-    ...(props.contactUrl ? [{ key: "contact", label: "Guardar contacto", value: props.contactUrl }] : []),
-    ...links.map((link) => ({ key: `link_${link.id}`, label: link.label, value: link.url })),
+    ...(content.recommendations.show
+      ? links.map((link) => ({ key: `link_${link.id}`, label: link.subtitle ? `${link.label} - ${link.subtitle}` : link.label, value: link.url }))
+      : []),
     ...(apple.showCustomFields
       ? (props.customFields ?? [])
           .filter((f) => f.location === "back")
@@ -139,12 +148,14 @@ export function PassPreview(props: PassPreviewProps) {
           <div className="mt-8">{nameBlock(props)}</div>
         )}
         {props.appleImageUrl && <div className="mt-4">{nameBlock(props)}</div>}
-        <div className="mt-6">
-          <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: props.labelColor }}>
-            {props.latestLabel || "Último mensaje"}
+        {content.latest.show && (
+          <div className="mt-6">
+            <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: props.labelColor }}>
+              {props.latestLabel || "Último mensaje"}
+            </div>
+            <div className="mt-1 text-sm leading-snug">{props.message || "Aquí recibirás novedades."}</div>
           </div>
-          <div className="mt-1 text-sm leading-snug">{props.message || "Aquí recibirás novedades."}</div>
-        </div>
+        )}
         {frontFields.length > 0 && (
           <div className="mt-4 grid grid-cols-2 gap-2">
             {frontFields.map((f) => (
@@ -187,9 +198,9 @@ export function PassPreview(props: PassPreviewProps) {
         </details>
       )}
 
-      {links.length > 0 && (
+      {content.recommendations.show && links.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-muted">Botones de la página pública</p>
+          <p className="text-xs font-medium text-muted">{content.recommendations.title}</p>
           {links.map((link: CardLink) => (
             <div
               key={link.id}
@@ -202,8 +213,16 @@ export function PassPreview(props: PassPreviewProps) {
                     : { background: "rgba(127,127,127,0.15)" }
               }
             >
-              <Glyph path={LINK_ICON_PATHS[link.icon]} size={16} />
-              <span className="truncate">{link.label}</span>
+              {link.iconAssetId ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={`/api/cards/${props.cardId}/asset/${link.iconAssetId}`} alt="" className="h-4 w-4 rounded-full object-cover" />
+              ) : (
+                <Glyph path={LINK_ICON_PATHS[link.icon]} size={16} />
+              )}
+              <span className="min-w-0">
+                <span className="block truncate">{link.label}</span>
+                {link.subtitle && <span className="block truncate text-xs opacity-70">{link.subtitle}</span>}
+              </span>
             </div>
           ))}
         </div>

@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/passes/
   if (!parsed.success) return publicError(request, slug, 400, "Correo electrónico inválido");
 
   try {
-    const url = await issueGooglePass(config, subscribers, googleApi, card, parsed.data);
+    const url = await issueGooglePass(config, cards, subscribers, googleApi, card, parsed.data);
     const wantsJson = (request.headers.get("accept") ?? "").includes("application/json");
     return wantsJson ? Response.json({ url }) : Response.redirect(url, 303);
   } catch (error) {

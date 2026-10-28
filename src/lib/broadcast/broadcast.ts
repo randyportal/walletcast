@@ -5,8 +5,9 @@ import type { SubscriberRepository } from "@/lib/subscribers/repository";
 import type { MessageInput } from "@/lib/cards/validation";
 import type { ApnsSender } from "@/lib/apple/apns";
 import type { GoogleWalletApi } from "@/lib/google/client";
-import { buildNotifyMessage, buildObjectPatch, objectId } from "@/lib/google/objects";
+import { buildMessagePatch, buildNotifyMessage, objectId } from "@/lib/google/objects";
 import { GoogleWalletError } from "@/lib/google/client";
+import { normalizeContent } from "@/lib/cards/content";
 import { mapWithConcurrency } from "@/lib/http/concurrency";
 
 /** Google only shows ~3 notifying messages per pass per 24h. */
@@ -53,31 +54,43 @@ export async function broadcast(
   const warnings: string[] = [];
   const errors: string[] = [];
   const dayAgo = new Date(now.getTime() - 24 * 3600_000);
+  const messageText = passText(input);
+  if (card.latestMessage === messageText) {
+    warnings.push("El mensaje es idéntico al anterior: Apple Wallet no mostrará otra notificación.");
+  }
   if ((await deps.cards.countMessagesSince(cardId, dayAgo)) >= GOOGLE_DAILY_NOTIFICATION_LIMIT) {
     warnings.push(
-      `More than ${GOOGLE_DAILY_NOTIFICATION_LIMIT} messages in 24h: Google Wallet may update the pass silently without notifying.`,
+      `Más de ${GOOGLE_DAILY_NOTIFICATION_LIMIT} mensajes en 24 h: Google Wallet puede actualizar el pase sin notificar.`,
     );
   }
 
-  await deps.cards.setLatestMessage(cardId, passText(input), now);
-  const updatedCard = { ...card, latestMessage: passText(input), latestMessageAt: now, updatedAt: now };
+  const content = normalizeContent(card);
+  const history = await deps.cards.listMessages(cardId, content.config.latest.historyLimit);
+  await deps.cards.setLatestMessage(cardId, messageText, now);
+  const updatedCard = { ...card, latestMessage: messageText, latestMessageAt: now, updatedAt: now };
 
-  // Apple: empty push -> devices fetch the new pass -> changeMessage notification.
-  let apple = { targets: 0, sent: 0, failed: 0 };
-  if (deps.apns) {
-    const tokens = await deps.subscribers.applePushTokensForCard(cardId);
-    const result = await deps.apns.sendPassUpdates(tokens);
-    await deps.subscribers.removeApplePushTokens(result.invalidTokens);
-    apple = { targets: tokens.length, sent: result.sent, failed: result.failed };
-    errors.push(...result.errors.map((e) => `Apple: ${e}`));
-  }
+  const sendApple = async () => {
+    const result = { targets: 0, sent: 0, failed: 0 };
+    const localErrors: string[] = [];
+    if (deps.apns) {
+      const tokens = await deps.subscribers.applePushTokensForCard(cardId);
+      const pushed = await deps.apns.sendPassUpdates(tokens);
+      await deps.subscribers.removeApplePushTokens(pushed.invalidTokens);
+      result.targets = tokens.length;
+      result.sent = pushed.sent;
+      result.failed = pushed.failed;
+      localErrors.push(...pushed.errors.map((e) => `Apple: ${e}`));
+    }
+    return { result, errors: localErrors };
+  };
 
-  // Google: patch the pass text, then add a notifying message.
-  let google = { targets: 0, sent: 0, failed: 0 };
-  if (deps.google) {
+  const sendGoogle = async () => {
+    const result = { targets: 0, sent: 0, failed: 0 };
+    const localErrors: string[] = [];
+    if (!deps.google) return { result, errors: localErrors };
     const { api, issuerId } = deps.google;
     const targets = await deps.subscribers.listActiveGoogle(cardId);
-    const patch = buildObjectPatch(updatedCard, deps.baseUrl);
+    const patch = buildMessagePatch(updatedCard, history);
     const messageId = `m${now.getTime()}`;
     const outcomes = await mapWithConcurrency(targets, 10, async (sub) => {
       const id = objectId(issuerId, sub);
@@ -94,9 +107,17 @@ export async function broadcast(
       }
     });
     const failures = outcomes.filter((o): o is string => o !== null);
-    google = { targets: targets.length, sent: targets.length - failures.length, failed: failures.length };
-    errors.push(...failures.slice(0, 5).map((e) => `Google: ${e}`));
-  }
+    result.targets = targets.length;
+    result.sent = targets.length - failures.length;
+    result.failed = failures.length;
+    localErrors.push(...failures.slice(0, 5).map((e) => `Google: ${e}`));
+    return { result, errors: localErrors };
+  };
+
+  const [appleOutcome, googleOutcome] = await Promise.all([sendApple(), sendGoogle()]);
+  const apple = appleOutcome.result;
+  const google = googleOutcome.result;
+  errors.push(...appleOutcome.errors, ...googleOutcome.errors);
 
   const [message] = await deps.db
     .insert(messages)

@@ -13,6 +13,7 @@ import {
 import type { CardField, CardLink } from "@/lib/cards/design";
 import { DEFAULT_GOOGLE_CONFIG, type GoogleConfig } from "@/lib/cards/google";
 import { DEFAULT_APPLE_CONFIG, type AppleConfig } from "@/lib/cards/apple";
+import { LEGACY_CONTENT_CONFIG, type ContentConfig } from "@/lib/cards/content";
 
 /** Binary column (PNG images). PGlite returns Uint8Array, postgres-js Buffer: normalise to Buffer. */
 const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
@@ -69,6 +70,7 @@ export const cards = pgTable("cards", {
   barcodeContent: text("barcode_content").notNull().default("link"),
   barcodeValue: text("barcode_value"),
   googleConfig: jsonb("google_config").$type<GoogleConfig>().notNull().default(DEFAULT_GOOGLE_CONFIG),
+  contentConfig: jsonb("content_config").$type<ContentConfig>().notNull().default(LEGACY_CONTENT_CONFIG),
   appleConfig: jsonb("apple_config").$type<AppleConfig>().notNull().default(DEFAULT_APPLE_CONFIG),
   appleImage: bytea("apple_image"),
   publicPageMode: text("public_page_mode").notNull().default("full"),

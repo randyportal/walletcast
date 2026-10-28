@@ -25,8 +25,9 @@ import {
   processModuleImageUpload,
 } from "@/lib/cards/images";
 import { broadcast } from "@/lib/broadcast/broadcast";
-import { buildGenericClass, buildObjectPatch, objectId } from "@/lib/google/objects";
+import { buildGenericClass, buildGenericObject, objectId } from "@/lib/google/objects";
 import { GoogleWalletError } from "@/lib/google/client";
+import { normalizeContent, previousMessages } from "@/lib/cards/content";
 import type { Card } from "@/lib/db/schema";
 import { requireAdmin, requireUser } from "./auth";
 
@@ -193,10 +194,17 @@ async function syncGoogleCard(card: Card, services: Services): Promise<string[]>
   }
   const targets = await subscribers.listActiveGoogle(card.id);
   if (targets.length > 0) {
-    const patch = buildObjectPatch(card, config.baseUrl);
+    const content = normalizeContent(card);
+    const history = previousMessages(
+      await services.cards.listMessages(card.id, content.config.latest.historyLimit + 1),
+      card.latestMessage,
+    );
     const outcomes = await mapWithConcurrency(targets, 10, async (subscriber) => {
       try {
-        await googleApi.patchGenericObject(objectId(google.issuerId, subscriber), patch);
+        await googleApi.updateGenericObject(
+          objectId(google.issuerId, subscriber),
+          buildGenericObject(google.issuerId, card, subscriber, config.baseUrl, history),
+        );
         return null;
       } catch (error) {
         if (error instanceof GoogleWalletError && error.status === 404) {
@@ -351,7 +359,7 @@ export async function sendMessageAction(cardId: string, _prev: FormState, formDa
   const delivered = m.appleSent + m.googleSent;
   const targets = m.appleTargets + m.googleTargets;
   return {
-    success: `Sent to ${delivered} of ${targets} wallet${targets === 1 ? "" : "s"}.`,
+    success: `Enviado a ${delivered} de ${targets} cartera${targets === 1 ? "" : "s"}.`,
     warnings: [...result.warnings, ...result.errors],
   };
 }
@@ -373,7 +381,7 @@ export async function createUserAction(_prev: FormState, formData: FormData): Pr
     throw error;
   }
   revalidatePath("/dashboard/users");
-  return { success: `User ${parsed.data.username} created.` };
+  return { success: `Usuario ${parsed.data.username} creado.` };
 }
 
 export async function updateUserAction(userId: string, _prev: FormState, formData: FormData): Promise<FormState> {

@@ -1,0 +1,1 @@
+ALTER TABLE "cards" ADD COLUMN "content_config" jsonb DEFAULT '{"version":0,"latest":{"show":true,"showHistory":true,"historyTitle":"Mensajes recientes","historyLimit":5},"recommendations":{"show":true,"title":"Recomendaciones"}}'::jsonb NOT NULL;

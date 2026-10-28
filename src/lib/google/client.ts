@@ -19,6 +19,7 @@ export class GoogleWalletError extends Error {
 export interface GoogleWalletApi {
   upsertGenericClass(genericClass: { id: string }): Promise<void>;
   patchGenericObject(id: string, patch: object): Promise<void>;
+  updateGenericObject(id: string, object: object): Promise<void>;
   addMessageToGenericObject(id: string, message: object): Promise<void>;
 }
 
@@ -75,6 +76,10 @@ export function createGoogleWalletApi(
 
     async patchGenericObject(id, patch) {
       await expectOk(await call("PATCH", `/genericObject/${encodeURIComponent(id)}`, patch), "Update object");
+    },
+
+    async updateGenericObject(id, object) {
+      await expectOk(await call("PUT", `/genericObject/${encodeURIComponent(id)}`, object), "Replace object");
     },
 
     async addMessageToGenericObject(id, message) {

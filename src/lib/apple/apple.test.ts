@@ -9,6 +9,7 @@ import { createCardRepository } from "@/lib/cards/repository";
 import { createSubscriberRepository } from "@/lib/subscribers/repository";
 import { CardInputSchema } from "@/lib/cards/validation";
 import { buildApplePass, latestMessageText } from "./pass";
+import type { HistoryMessage } from "@/lib/cards/content";
 import { createApnsSender, summarisePushResults } from "./apns";
 import { createAppleWebService, safeEqual } from "./webservice";
 
@@ -47,7 +48,7 @@ function zipRead(buf: Buffer, name: string): Buffer {
   throw new Error(`${name} not in pass`);
 }
 
-async function passJsonFor(over: Record<string, unknown>, extra: { timeZone?: string; now?: Date } = {}) {
+async function passJsonFor(over: Record<string, unknown>, extra: { timeZone?: string; now?: Date; history?: HistoryMessage[] } = {}) {
   const db = await createTestDb();
   const card = await createCardRepository(db).create(CardInputSchema.parse({ name: "Lu's Café", organizationName: "Lu", slug: "lu", ...over }));
   const sub = await createSubscriberRepository(db).create({ cardId: card.id, platform: "apple" });
@@ -90,6 +91,31 @@ describe("buildApplePass", () => {
     expect(json.storeCard.primaryFields[0].value).toBe(card.name);
     expect(json.generic).toBeUndefined();
     expect(zipEntries(pkpass)).toEqual(expect.arrayContaining(["strip.png", "strip@2x.png", "strip@3x.png"]));
+  });
+
+  it("hides the front latest message but keeps a back changeMessage and history", async () => {
+    const history: HistoryMessage[] = [
+      { title: "Anterior", body: "Mensaje anterior", createdAt: new Date("2026-10-09T10:00:00Z") },
+      { title: "Más viejo", body: "Otro mensaje", createdAt: new Date("2026-10-08T10:00:00Z") },
+    ];
+    const { json } = await passJsonFor(
+      {
+        welcomeText: "Bienvenido",
+        contentConfig: JSON.stringify({
+          version: 2,
+          latest: { show: false, showHistory: true, historyTitle: "Historial", historyLimit: 5 },
+          recommendations: { show: true, title: "Recomendaciones" },
+        }),
+      },
+      { history },
+    );
+    expect(json.generic.secondaryFields ?? []).toEqual([]);
+    expect(json.generic.backFields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "latest", value: "Bienvenido", changeMessage: "%@" }),
+        expect.objectContaining({ key: "history", label: "Historial", value: expect.stringContaining("Anterior: Mensaje anterior") }),
+      ]),
+    );
   });
 
   it("produces a signed pkpass bundle", async () => {
