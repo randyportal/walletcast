@@ -4,23 +4,23 @@ import { notFound } from "next/navigation";
 import { getServices } from "@/lib/services";
 import { SendForm } from "@/components/SendForm";
 import { sendMessageAction } from "@/server/actions";
-import { requireUser } from "@/server/auth";
+import { requireSender } from "@/server/auth";
 import { GOOGLE_DAILY_NOTIFICATION_LIMIT } from "@/lib/broadcast/broadcast";
 import { Glyph, UI_ICON_PATHS } from "@/components/icons";
 
 export const metadata: Metadata = { title: "Enviar" };
 
 export default async function SendCardPage({ params }: PageProps<"/dashboard/send/[id]">) {
-  await requireUser();
+  const user = await requireSender();
   const { id } = await params;
   const { cards } = await getServices();
-  const card = await cards.findById(id);
+  const card = await cards.findById(user.organizationId, id);
   if (!card) notFound();
 
-  const stats = (await cards.listWithStats()).find((item) => item.id === id);
+  const stats = (await cards.listWithStats(user.organizationId)).find((item) => item.id === id);
   const total = (stats?.appleSubscribers ?? 0) + (stats?.googleSubscribers ?? 0);
   const now = new Date();
-  const googleToday = await cards.countMessagesSince(card.id, new Date(now.getTime() - 24 * 3600_000));
+  const googleToday = await cards.countMessagesSince(user.organizationId, card.id, new Date(now.getTime() - 24 * 3600_000));
   const googleRemaining = Math.max(0, GOOGLE_DAILY_NOTIFICATION_LIMIT - googleToday);
 
   return (

@@ -119,7 +119,7 @@ export function createAppleWebService(deps: AppleWebServiceDeps) {
     }): Promise<WsResponse> {
       const subscriber = await authorize(args.passTypeId, args.serialNumber, args.authorization);
       if (!subscriber) return { status: 401 };
-      const card = await cards.findById(subscriber.cardId);
+      const card = await cards.findById(subscriber.organizationId, subscriber.cardId);
       if (!card) return { status: 404 };
 
       const lastModified = new Date(Math.max(subscriber.updatedAt.getTime(), card.updatedAt.getTime()));
@@ -130,7 +130,7 @@ export function createAppleWebService(deps: AppleWebServiceDeps) {
         }
       }
       const limit = normalizeContent(card).config.latest.historyLimit + 1;
-      const history = previousMessages(await cards.listMessages(card.id, limit), card.latestMessage);
+      const history = previousMessages(await cards.listMessages(card.organizationId, card.id, limit), card.latestMessage);
       const pass = await deps.buildPass(card, subscriber, history);
       return {
         status: 200,

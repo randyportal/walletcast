@@ -8,6 +8,7 @@ import { createSelfSignedCert, testAppleConfig } from "@/lib/testing/certs";
 import { createCardRepository } from "@/lib/cards/repository";
 import { createSubscriberRepository } from "@/lib/subscribers/repository";
 import { CardInputSchema } from "@/lib/cards/validation";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/constants";
 import { buildApplePass, latestMessageText } from "./pass";
 import type { HistoryMessage } from "@/lib/cards/content";
 import { createApnsSender, summarisePushResults } from "./apns";
@@ -50,8 +51,8 @@ function zipRead(buf: Buffer, name: string): Buffer {
 
 async function passJsonFor(over: Record<string, unknown>, extra: { timeZone?: string; now?: Date; history?: HistoryMessage[] } = {}) {
   const db = await createTestDb();
-  const card = await createCardRepository(db).create(CardInputSchema.parse({ name: "Lu's Café", organizationName: "Lu", slug: "lu", ...over }));
-  const sub = await createSubscriberRepository(db).create({ cardId: card.id, platform: "apple" });
+  const card = await createCardRepository(db).create(DEFAULT_ORGANIZATION_ID, CardInputSchema.parse({ name: "Lu's Café", organizationName: "Lu", slug: "lu", ...over }));
+  const sub = await createSubscriberRepository(db).create({ organizationId: DEFAULT_ORGANIZATION_ID, cardId: card.id, platform: "apple" });
   const pkpass = await buildApplePass({ card, subscriber: sub, apple, baseUrl: "https://wc.test", ...extra });
   return { card, pkpass, json: JSON.parse(zipRead(pkpass, "pass.json").toString()) };
 }
@@ -120,8 +121,8 @@ describe("buildApplePass", () => {
 
   it("produces a signed pkpass bundle", async () => {
     const db = await createTestDb();
-    const card = await createCardRepository(db).create(cardInput);
-    const sub = await createSubscriberRepository(db).create({ cardId: card.id, platform: "apple" });
+    const card = await createCardRepository(db).create(DEFAULT_ORGANIZATION_ID, cardInput);
+    const sub = await createSubscriberRepository(db).create({ organizationId: DEFAULT_ORGANIZATION_ID, cardId: card.id, platform: "apple" });
     const pkpass = await buildApplePass({ card, subscriber: sub, apple, baseUrl: "https://wc.test" });
     const entries = zipEntries(pkpass);
     expect(entries).toEqual(expect.arrayContaining(["pass.json", "manifest.json", "signature", "icon.png", "icon@2x.png"]));
@@ -132,6 +133,7 @@ describe("buildApplePass", () => {
     const { generateDefaultIcon } = await import("@/lib/cards/images");
     const appleImage = await generateDefaultIcon("A", "#000000", "#ffffff");
     const card = await createCardRepository(db).create(
+      DEFAULT_ORGANIZATION_ID,
       CardInputSchema.parse({
         name: "Lu's Café",
         organizationName: "Lu",
@@ -148,7 +150,7 @@ describe("buildApplePass", () => {
       }),
       { appleImage },
     );
-    const sub = await createSubscriberRepository(db).create({ cardId: card.id, platform: "apple" });
+    const sub = await createSubscriberRepository(db).create({ organizationId: DEFAULT_ORGANIZATION_ID, cardId: card.id, platform: "apple" });
     const pkpass = await buildApplePass({ card, subscriber: sub, apple, baseUrl: "https://wc.test" });
     const json = JSON.parse(zipRead(pkpass, "pass.json").toString());
 
@@ -164,8 +166,8 @@ describe("buildApplePass", () => {
     const db = await createTestDb();
     const { generateDefaultIcon } = await import("@/lib/cards/images");
     const logo = await generateDefaultIcon("L", "#000000", "#ffffff");
-    const card = await createCardRepository(db).create(cardInput, { logo });
-    const sub = await createSubscriberRepository(db).create({ cardId: card.id, platform: "apple" });
+    const card = await createCardRepository(db).create(DEFAULT_ORGANIZATION_ID, cardInput, { logo });
+    const sub = await createSubscriberRepository(db).create({ organizationId: DEFAULT_ORGANIZATION_ID, cardId: card.id, platform: "apple" });
     const entries = zipEntries(await buildApplePass({ card, subscriber: sub, apple, baseUrl: "https://wc.test" }));
     expect(entries).toContain("logo@2x.png");
   });
@@ -190,9 +192,9 @@ describe("apple web service", () => {
     db = await createTestDb();
     const cards = createCardRepository(db);
     const subscribers = createSubscriberRepository(db);
-    const card = await cards.create(cardInput);
+    const card = await cards.create(DEFAULT_ORGANIZATION_ID, cardInput);
     cardId = card.id;
-    const sub = await subscribers.create({ cardId: card.id, platform: "apple" });
+    const sub = await subscribers.create({ organizationId: DEFAULT_ORGANIZATION_ID, cardId: card.id, platform: "apple" });
     serial = sub.serialNumber;
     token = sub.authToken;
     ws = createAppleWebService({
@@ -231,7 +233,7 @@ describe("apple web service", () => {
     });
     expect(none.status).toBe(204);
 
-    expect(await createSubscriberRepository(db).applePushTokensForCard(cardId)).toEqual([pushToken]);
+    expect(await createSubscriberRepository(db).applePushTokensForCard(DEFAULT_ORGANIZATION_ID, cardId)).toEqual([pushToken]);
   });
 
   it("rejects bad auth, wrong pass type and bad push tokens", async () => {
@@ -277,7 +279,7 @@ describe("apple web service", () => {
     const first = await ws.listUpdated({ deviceLibraryId: device, passTypeId: apple.passTypeId, passesUpdatedSince: null });
     const tag = JSON.parse(String(first.body)).lastUpdated;
     await new Promise((r) => setTimeout(r, 5));
-    await createCardRepository(db).update(cardId, { ...cardInput, bgColor: "#ff0000" });
+    await createCardRepository(db).update(DEFAULT_ORGANIZATION_ID, cardId, { ...cardInput, bgColor: "#ff0000" });
     const next = await ws.listUpdated({ deviceLibraryId: device, passTypeId: apple.passTypeId, passesUpdatedSince: tag });
     expect(JSON.parse(String(next.body)).serialNumbers).toEqual([serial]);
   });

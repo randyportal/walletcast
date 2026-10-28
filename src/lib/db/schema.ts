@@ -8,6 +8,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import type { CardField, CardLink } from "@/lib/cards/design";
@@ -26,8 +27,21 @@ const timestamps = {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 };
 
+export const organizations = pgTable("organizations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  currency: text("currency").notNull().default("MXN"),
+  timeZone: text("time_zone").notNull().default("America/Mexico_City"),
+  locale: text("locale").notNull().default("es"),
+  ...timestamps,
+});
+
 export const cards = pgTable("cards", {
   id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: uuid("organization_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
   slug: text("slug").notNull().unique(),
   name: text("name").notNull(),
   organizationName: text("organization_name").notNull(),
@@ -101,6 +115,9 @@ export const subscribers = pgTable(
   "subscribers",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
     cardId: uuid("card_id")
       .notNull()
       .references(() => cards.id, { onDelete: "cascade" }),
@@ -112,7 +129,7 @@ export const subscribers = pgTable(
     status: text("status", { enum: ["active", "removed"] }).notNull().default("active"),
     ...timestamps,
   },
-  (t) => [index("subscribers_card_idx").on(t.cardId, t.platform, t.status)],
+  (t) => [index("subscribers_card_idx").on(t.cardId, t.platform, t.status), index("subscribers_org_idx").on(t.organizationId)],
 );
 
 export const appleDevices = pgTable("apple_devices", {
@@ -140,6 +157,9 @@ export const messages = pgTable(
   "messages",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
     cardId: uuid("card_id")
       .notNull()
       .references(() => cards.id, { onDelete: "cascade" }),
@@ -154,11 +174,14 @@ export const messages = pgTable(
     sentBy: text("sent_by"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("messages_card_idx").on(t.cardId, t.createdAt)],
+  (t) => [index("messages_card_idx").on(t.cardId, t.createdAt), index("messages_org_idx").on(t.organizationId)],
 );
 
 export const USER_ROLES = ["admin", "marketing"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
+
+export const ORGANIZATION_ROLES = ["owner", "admin", "marketing", "staff", "viewer"] as const;
+export type OrganizationRole = (typeof ORGANIZATION_ROLES)[number];
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -167,10 +190,52 @@ export const users = pgTable("users", {
   email: text("email").unique(),
   passwordHash: text("password_hash").notNull(),
   role: text("role", { enum: USER_ROLES }).notNull().default("marketing"),
+  isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
   enabled: boolean("enabled").notNull().default(true),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   ...timestamps,
 });
+
+export const organizationMemberships = pgTable(
+  "organization_memberships",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role", { enum: ORGANIZATION_ROLES }).notNull().default("viewer"),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("organization_memberships_org_user_unique").on(t.organizationId, t.userId),
+    index("organization_memberships_user_idx").on(t.userId),
+  ],
+);
+
+export const invitations = pgTable(
+  "invitations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    role: text("role", { enum: ORGANIZATION_ROLES }).notNull().default("marketing"),
+    token: text("token").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    invitedByUserId: uuid("invited_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("invitations_org_idx").on(t.organizationId, t.email)],
+);
+
+export type Organization = typeof organizations.$inferSelect;
+export type OrganizationMembership = typeof organizationMemberships.$inferSelect;
+export type Invitation = typeof invitations.$inferSelect;
 
 export type Card = typeof cards.$inferSelect;
 export type NewCard = typeof cards.$inferInsert;

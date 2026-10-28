@@ -3,6 +3,7 @@ import { createTestDb } from "@/lib/testing/db";
 import { createCardRepository } from "@/lib/cards/repository";
 import { createSubscriberRepository } from "@/lib/subscribers/repository";
 import { CardInputSchema } from "@/lib/cards/validation";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/constants";
 import type { ApnsSender } from "@/lib/apple/apns";
 import { isCronAuthorized, refreshGlow } from "./refresh";
 
@@ -12,10 +13,10 @@ async function setup() {
   const db = await createTestDb();
   const cards = createCardRepository(db);
   const subscribers = createSubscriberRepository(db);
-  const card = await cards.create(CardInputSchema.parse({ name: "A", organizationName: "B", slug: "a", dayGlow: "on" }));
-  const plain = await cards.create(CardInputSchema.parse({ name: "P", organizationName: "B", slug: "p" }));
+  const card = await cards.create(DEFAULT_ORGANIZATION_ID, CardInputSchema.parse({ name: "A", organizationName: "B", slug: "a", dayGlow: "on" }));
+  const plain = await cards.create(DEFAULT_ORGANIZATION_ID, CardInputSchema.parse({ name: "P", organizationName: "B", slug: "p" }));
   for (const [c, token] of [[card, TOKEN], [plain, "b".repeat(64)]] as const) {
-    const sub = await subscribers.create({ cardId: c.id, platform: "apple" });
+    const sub = await subscribers.create({ organizationId: DEFAULT_ORGANIZATION_ID, cardId: c.id, platform: "apple" });
     await subscribers.registerAppleDevice({ deviceLibraryId: `d-${c.slug}`, pushToken: token, serialNumber: sub.serialNumber, passTypeId: "pass.test" });
   }
   const pushed: string[][] = [];
@@ -38,7 +39,7 @@ describe("refreshGlow", () => {
     expect(await refreshGlow({ ...deps, now: at("2026-10-10T08:30:00Z") })).toEqual({ cards: 0, pushed: 0 });
     expect(await refreshGlow({ ...deps, now: at("2026-10-10T10:30:00Z") })).toEqual({ cards: 1, pushed: 1 });
     expect(s.pushed).toEqual([[TOKEN], [TOKEN]]);
-    expect((await s.cards.findById(s.card.id))?.glowSlot).toBe(3);
+    expect((await s.cards.findById(DEFAULT_ORGANIZATION_ID, s.card.id))?.glowSlot).toBe(3);
   });
 
   it("does nothing without APNs", async () => {

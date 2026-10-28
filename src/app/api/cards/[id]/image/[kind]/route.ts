@@ -15,7 +15,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/cards/[i
   const allowed = new Set(["logo", "icon", "hero", "favicon", "background", "apple-image"]);
   if (!allowed.has(kind)) return new Response("No encontrado", { status: 404 });
   const { config, cards } = await getServices();
-  const card = await cards.findById(id);
+  const card = await cards.findByIdAny(id);
   if (!card) return new Response("No encontrado", { status: 404 });
 
   const headers = { "cache-control": "public, max-age=86400, immutable" };

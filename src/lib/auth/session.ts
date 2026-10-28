@@ -1,4 +1,5 @@
 import { jwtVerify, SignJWT } from "jose";
+import type { OrganizationRole } from "@/lib/db/schema";
 
 export const SESSION_COOKIE = "wc_session";
 export const SESSION_TTL_SECONDS = 7 * 24 * 3600;
@@ -11,6 +12,10 @@ export interface SessionUser {
   username: string;
   name: string;
   role: UserRole;
+  organizationId: string | null;
+  organizationRole: OrganizationRole | null;
+  organizationName: string | null;
+  isPlatformAdmin: boolean;
 }
 
 function key(secret: string): Uint8Array {
@@ -19,7 +24,12 @@ function key(secret: string): Uint8Array {
 
 export async function createSessionToken(secret: string, user: SessionUser, now = new Date()): Promise<string> {
   const iat = Math.floor(now.getTime() / 1000);
-  return new SignJWT({ username: user.username, name: user.name, role: user.role })
+  return new SignJWT({
+    username: user.username,
+    name: user.name,
+    role: user.role,
+    organizationId: user.organizationId ?? undefined,
+  })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.id)
     .setAudience(AUDIENCE)
@@ -39,6 +49,10 @@ export async function verifySessionToken(token: string | undefined, secret: stri
       username: typeof payload.username === "string" ? payload.username : "",
       name: typeof payload.name === "string" ? payload.name : "",
       role,
+      organizationId: typeof payload.organizationId === "string" ? payload.organizationId : null,
+      organizationRole: null,
+      organizationName: null,
+      isPlatformAdmin: false,
     };
   } catch {
     return null;

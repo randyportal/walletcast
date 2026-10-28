@@ -5,6 +5,7 @@ import { createTestDb } from "@/lib/testing/db";
 import { createSubscriberRepository } from "@/lib/subscribers/repository";
 import { createCardRepository, SlugTakenError } from "./repository";
 import { CardInputSchema, MessageInputSchema, slugify } from "./validation";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/constants";
 import {
   generateDefaultIcon,
   ImageUploadError,
@@ -47,51 +48,51 @@ describe("card repository", () => {
 
   it("creates, finds, updates and deletes cards", async () => {
     const repo = createCardRepository(db);
-    const card = await repo.create(input());
+    const card = await repo.create(DEFAULT_ORGANIZATION_ID, input());
     expect((await repo.findBySlug("lus-cafe"))?.id).toBe(card.id);
 
-    const updated = await repo.update(card.id, input({ name: "Lu" }), { logo: Buffer.from("x") });
+    const updated = await repo.update(DEFAULT_ORGANIZATION_ID, card.id, input({ name: "Lu" }), { logo: Buffer.from("x") });
     expect(updated?.name).toBe("Lu");
-    expect((await repo.findById(card.id))?.logo?.toString()).toBe("x");
+    expect((await repo.findById(DEFAULT_ORGANIZATION_ID, card.id))?.logo?.toString()).toBe("x");
 
-    await repo.update(card.id, input({ name: "Lu 2" }));
-    expect((await repo.findById(card.id))?.logo?.toString()).toBe("x");
+    await repo.update(DEFAULT_ORGANIZATION_ID, card.id, input({ name: "Lu 2" }));
+    expect((await repo.findById(DEFAULT_ORGANIZATION_ID, card.id))?.logo?.toString()).toBe("x");
 
-    await repo.delete(card.id);
-    expect(await repo.findById(card.id)).toBeNull();
-    expect(await repo.findById("not-a-uuid")).toBeNull();
-    expect(await repo.update(card.id, input())).toBeNull();
+    await repo.delete(DEFAULT_ORGANIZATION_ID, card.id);
+    expect(await repo.findById(DEFAULT_ORGANIZATION_ID, card.id)).toBeNull();
+    expect(await repo.findById(DEFAULT_ORGANIZATION_ID, "not-a-uuid")).toBeNull();
+    expect(await repo.update(DEFAULT_ORGANIZATION_ID, card.id, input())).toBeNull();
   });
 
   it("refuses duplicate slugs", async () => {
     const repo = createCardRepository(db);
-    const a = await repo.create(input());
-    await expect(repo.create(input())).rejects.toBeInstanceOf(SlugTakenError);
-    const b = await repo.create(input({ slug: "other" }));
-    await expect(repo.update(b.id, input())).rejects.toBeInstanceOf(SlugTakenError);
-    expect(await repo.update(a.id, input())).not.toBeNull();
+    const a = await repo.create(DEFAULT_ORGANIZATION_ID, input());
+    await expect(repo.create(DEFAULT_ORGANIZATION_ID, input())).rejects.toBeInstanceOf(SlugTakenError);
+    const b = await repo.create(DEFAULT_ORGANIZATION_ID, input({ slug: "other" }));
+    await expect(repo.update(DEFAULT_ORGANIZATION_ID, b.id, input())).rejects.toBeInstanceOf(SlugTakenError);
+    expect(await repo.update(DEFAULT_ORGANIZATION_ID, a.id, input())).not.toBeNull();
   });
 
   it("lists cards with subscriber counts and sets latest message", async () => {
     const cardsRepo = createCardRepository(db);
     const subs = createSubscriberRepository(db);
-    const card = await cardsRepo.create(input());
-    await subs.create({ cardId: card.id, platform: "apple" });
-    await subs.create({ cardId: card.id, platform: "google" });
-    const removed = await subs.create({ cardId: card.id, platform: "google" });
+    const card = await cardsRepo.create(DEFAULT_ORGANIZATION_ID, input());
+    await subs.create({ organizationId: DEFAULT_ORGANIZATION_ID, cardId: card.id, platform: "apple" });
+    await subs.create({ organizationId: DEFAULT_ORGANIZATION_ID, cardId: card.id, platform: "google" });
+    const removed = await subs.create({ organizationId: DEFAULT_ORGANIZATION_ID, cardId: card.id, platform: "google" });
     await subs.setStatus(removed.serialNumber, "removed");
 
-    const [listed] = await cardsRepo.listWithStats();
+    const [listed] = await cardsRepo.listWithStats(DEFAULT_ORGANIZATION_ID);
     expect(listed.appleSubscribers).toBe(1);
     expect(listed.googleSubscribers).toBe(1);
 
     const at = new Date(Date.now() + 1000);
-    await cardsRepo.setLatestMessage(card.id, "Hello", at);
-    expect((await cardsRepo.findById(card.id))?.latestMessage).toBe("Hello");
-    const [sub] = await subs.listActiveGoogle(card.id);
+    await cardsRepo.setLatestMessage(DEFAULT_ORGANIZATION_ID, card.id, "Hello", at);
+    expect((await cardsRepo.findById(DEFAULT_ORGANIZATION_ID, card.id))?.latestMessage).toBe("Hello");
+    const [sub] = await subs.listActiveGoogle(DEFAULT_ORGANIZATION_ID, card.id);
     expect(sub.updatedAt.getTime()).toBe(at.getTime());
-    expect(await cardsRepo.listMessages(card.id)).toEqual([]);
-    expect(await cardsRepo.countMessagesSince(card.id, new Date(0))).toBe(0);
+    expect(await cardsRepo.listMessages(DEFAULT_ORGANIZATION_ID, card.id)).toEqual([]);
+    expect(await cardsRepo.countMessagesSince(DEFAULT_ORGANIZATION_ID, card.id, new Date(0))).toBe(0);
   });
 });
 
@@ -157,15 +158,15 @@ describe("business-card options", () => {
     const db = await createTestDb();
     const repo = createCardRepository(db);
     const subs = createSubscriberRepository(db);
-    const glow = await repo.create(input({ slug: "glow", dayGlow: "on" }));
-    await repo.create(input({ slug: "plain" }));
-    const sub = await subs.create({ cardId: glow.id, platform: "apple" });
+    const glow = await repo.create(DEFAULT_ORGANIZATION_ID, input({ slug: "glow", dayGlow: "on" }));
+    await repo.create(DEFAULT_ORGANIZATION_ID, input({ slug: "plain" }));
+    const sub = await subs.create({ organizationId: DEFAULT_ORGANIZATION_ID, cardId: glow.id, platform: "apple" });
 
     expect((await repo.listDayGlow()).map((c) => c.slug)).toEqual(["glow"]);
 
     const at = new Date("2030-10-10T08:00:00Z");
-    await repo.markGlowSlot(glow.id, 2, at);
-    expect((await repo.findById(glow.id))?.glowSlot).toBe(2);
+    await repo.markGlowSlot(DEFAULT_ORGANIZATION_ID, glow.id, 2, at);
+    expect((await repo.findById(DEFAULT_ORGANIZATION_ID, glow.id))?.glowSlot).toBe(2);
     expect((await subs.findBySerial(sub.serialNumber))?.updatedAt.getTime()).toBe(at.getTime());
   });
 });

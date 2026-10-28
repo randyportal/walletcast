@@ -6,6 +6,7 @@ import { testAppleConfig } from "@/lib/testing/certs";
 import { createCardRepository } from "@/lib/cards/repository";
 import { createSubscriberRepository } from "@/lib/subscribers/repository";
 import { CardInputSchema } from "@/lib/cards/validation";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/constants";
 import type { GoogleWalletApi } from "@/lib/google/client";
 import { issueApplePass, issueGooglePass, IssueRequestSchema, PlatformDisabledError } from "./issue";
 
@@ -14,7 +15,7 @@ const baseConfig = parseConfig({ BASE_URL: "https://wc.test", SESSION_SECRET: "x
 async function setup() {
   const db = await createTestDb();
   const cards = createCardRepository(db);
-  const card = await cards.create(CardInputSchema.parse({ name: "Lu", organizationName: "Lu", slug: "lu" }));
+  const card = await cards.create(DEFAULT_ORGANIZATION_ID, CardInputSchema.parse({ name: "Lu", organizationName: "Lu", slug: "lu" }));
   return { card, cards, subscribers: createSubscriberRepository(db) };
 }
 
@@ -42,7 +43,7 @@ describe("issuing passes", () => {
     const config = { ...baseConfig, apple: testAppleConfig() };
     const pkpass = await issueApplePass(config, cards, subscribers, card, { email: "a@b.co", src: "door" });
     expect(pkpass.subarray(0, 2).toString()).toBe("PK");
-    expect(await subscribers.countBySource(card.id)).toEqual([expect.objectContaining({ source: "door" })]);
+    expect(await subscribers.countBySource(DEFAULT_ORGANIZATION_ID, card.id)).toEqual([expect.objectContaining({ source: "door" })]);
   });
 
   it("upserts the Google class and returns a save link", async () => {
@@ -68,6 +69,6 @@ describe("issuing passes", () => {
     const url = await issueGooglePass(config, cards, subscribers, api, card, { email: null, src: null });
     expect(url).toMatch(/^https:\/\/pay\.google\.com\/gp\/v\/save\//);
     expect(classes).toHaveLength(1);
-    expect(await subscribers.listActiveGoogle(card.id)).toHaveLength(1);
+    expect(await subscribers.listActiveGoogle(DEFAULT_ORGANIZATION_ID, card.id)).toHaveLength(1);
   });
 });

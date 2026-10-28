@@ -4,6 +4,7 @@ import { createTestDb } from "@/lib/testing/db";
 import { createCardRepository, type CardRepository } from "@/lib/cards/repository";
 import { createSubscriberRepository, type SubscriberRepository } from "@/lib/subscribers/repository";
 import { CardInputSchema } from "@/lib/cards/validation";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/constants";
 import type { ApnsSender } from "@/lib/apple/apns";
 import { GoogleWalletError, type GoogleWalletApi } from "@/lib/google/client";
 import { broadcast, CardNotFoundError, GOOGLE_DAILY_NOTIFICATION_LIMIT, passText } from "./broadcast";
@@ -20,11 +21,11 @@ describe("broadcast", () => {
     db = await createTestDb();
     cards = createCardRepository(db);
     subscribers = createSubscriberRepository(db);
-    cardId = (await cards.create(CardInputSchema.parse({ name: "Lu", organizationName: "Lu", slug: "lu" }))).id;
+    cardId = (await cards.create(DEFAULT_ORGANIZATION_ID, CardInputSchema.parse({ name: "Lu", organizationName: "Lu", slug: "lu" }))).id;
   });
 
   async function addApple(token: string) {
-    const sub = await subscribers.create({ cardId, platform: "apple" });
+    const sub = await subscribers.create({ organizationId: DEFAULT_ORGANIZATION_ID, cardId, platform: "apple" });
     await subscribers.registerAppleDevice({
       deviceLibraryId: `dev-${token}`,
       pushToken: token,
@@ -36,8 +37,8 @@ describe("broadcast", () => {
   it("pushes to Apple and Google, stores stats and prunes dead tokens", async () => {
     await addApple("t-ok");
     await addApple("t-dead");
-    const g1 = await subscribers.create({ cardId, platform: "google" });
-    const g2 = await subscribers.create({ cardId, platform: "google" });
+    const g1 = await subscribers.create({ organizationId: DEFAULT_ORGANIZATION_ID, cardId, platform: "google" });
+    const g2 = await subscribers.create({ organizationId: DEFAULT_ORGANIZATION_ID, cardId, platform: "google" });
 
     const pushed: string[][] = [];
     const apns: ApnsSender = {
@@ -60,13 +61,13 @@ describe("broadcast", () => {
     };
 
     const result = await broadcast(
-      { db, baseUrl: "https://wc.test", cards, subscribers, apns, google: { api, issuerId: "iss" }, now: () => new Date(5000) },
+      { db, organizationId: DEFAULT_ORGANIZATION_ID, baseUrl: "https://wc.test", cards, subscribers, apns, google: { api, issuerId: "iss" }, now: () => new Date(5000) },
       cardId,
       input,
     );
 
     expect(pushed).toEqual([["t-dead", "t-ok"]]);
-    expect(await subscribers.applePushTokensForCard(cardId)).toEqual(["t-ok"]);
+    expect(await subscribers.applePushTokensForCard(DEFAULT_ORGANIZATION_ID, cardId)).toEqual(["t-ok"]);
     expect(googleCalls).toContain(`msg iss.${g1.serialNumber}`);
     expect(googleCalls).not.toContain(`msg iss.${g2.serialNumber}`);
     expect(result.message).toMatchObject({
@@ -78,11 +79,11 @@ describe("broadcast", () => {
       googleFailed: 1,
     });
     expect(result.errors).toEqual(["Apple: t-dead: Unregistered", "Google: boom"]);
-    expect((await cards.findById(cardId))?.latestMessage).toBe(passText(input));
+    expect((await cards.findById(DEFAULT_ORGANIZATION_ID, cardId))?.latestMessage).toBe(passText(input));
   });
 
   it("marks Google passes removed when Google returns 404", async () => {
-    const sub = await subscribers.create({ cardId, platform: "google" });
+    const sub = await subscribers.create({ organizationId: DEFAULT_ORGANIZATION_ID, cardId, platform: "google" });
     const api: GoogleWalletApi = {
       async upsertGenericClass() {},
       async updateGenericObject() {},
@@ -92,7 +93,7 @@ describe("broadcast", () => {
       async addMessageToGenericObject() {},
     };
     const result = await broadcast(
-      { db, baseUrl: "https://wc.test", cards, subscribers, apns: null, google: { api, issuerId: "iss" } },
+      { db, organizationId: DEFAULT_ORGANIZATION_ID, baseUrl: "https://wc.test", cards, subscribers, apns: null, google: { api, issuerId: "iss" } },
       cardId,
       input,
     );
@@ -101,19 +102,19 @@ describe("broadcast", () => {
   });
 
   it("works with no platform configured and warns past the Google daily limit", async () => {
-    const deps = { db, baseUrl: "https://wc.test", cards, subscribers, apns: null, google: null };
+    const deps = { db, organizationId: DEFAULT_ORGANIZATION_ID, baseUrl: "https://wc.test", cards, subscribers, apns: null, google: null };
     for (let i = 0; i < GOOGLE_DAILY_NOTIFICATION_LIMIT; i++) {
       expect((await broadcast(deps, cardId, { ...input, body: `${input.body} ${i}` })).warnings).toEqual([]);
     }
     const last = await broadcast(deps, cardId, { ...input, body: `${input.body} last` });
     expect(last.warnings[0]).toMatch(/Google Wallet/);
     expect(last.message.appleTargets).toBe(0);
-    expect(await cards.listMessages(cardId, 10)).toHaveLength(GOOGLE_DAILY_NOTIFICATION_LIMIT + 1);
+    expect(await cards.listMessages(DEFAULT_ORGANIZATION_ID, cardId, 10)).toHaveLength(GOOGLE_DAILY_NOTIFICATION_LIMIT + 1);
   });
 
   it("rejects unknown cards", async () => {
     await expect(
-      broadcast({ db, baseUrl: "https://wc.test", cards, subscribers, apns: null, google: null }, "00000000-0000-0000-0000-000000000000", input),
+      broadcast({ db, organizationId: DEFAULT_ORGANIZATION_ID, baseUrl: "https://wc.test", cards, subscribers, apns: null, google: null }, "00000000-0000-0000-0000-000000000000", input),
     ).rejects.toBeInstanceOf(CardNotFoundError);
   });
 });

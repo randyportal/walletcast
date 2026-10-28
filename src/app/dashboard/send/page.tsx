@@ -1,14 +1,14 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { getServices } from "@/lib/services";
-import { requireUser } from "@/server/auth";
+import { requireSender } from "@/server/auth";
 
 export const metadata: Metadata = { title: "Enviar" };
 
 export default async function SendPage() {
-  const user = await requireUser();
+  const user = await requireSender();
   const { cards } = await getServices();
-  const list = await cards.listWithStats();
+  const list = await cards.listWithStats(user.organizationId);
   return (
     <>
       <div className="mb-6 flex items-center justify-between">

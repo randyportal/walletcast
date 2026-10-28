@@ -10,6 +10,7 @@ import {
 } from "@/lib/db/schema";
 
 export interface NewSubscriberInput {
+  organizationId: string;
   cardId: string;
   platform: Platform;
   email?: string | null;
@@ -26,6 +27,7 @@ export function createSubscriberRepository(db: Db) {
       const [row] = await db
         .insert(subscribers)
         .values({
+          organizationId: input.organizationId,
           cardId: input.cardId,
           platform: input.platform,
           email: input.email ?? null,
@@ -43,29 +45,34 @@ export function createSubscriberRepository(db: Db) {
       return row ?? null;
     },
 
-    async listForCard(cardId: string, limit = 200): Promise<Subscriber[]> {
+    async listForCard(organizationId: string, cardId: string, limit = 200): Promise<Subscriber[]> {
       return db
         .select()
         .from(subscribers)
-        .where(eq(subscribers.cardId, cardId))
+        .where(and(eq(subscribers.organizationId, organizationId), eq(subscribers.cardId, cardId)))
         .orderBy(desc(subscribers.createdAt))
         .limit(limit);
     },
 
-    async countBySource(cardId: string): Promise<{ source: string | null; n: number }[]> {
+    async countBySource(organizationId: string, cardId: string): Promise<{ source: string | null; n: number }[]> {
       return db
         .select({ source: subscribers.source, n: count() })
         .from(subscribers)
-        .where(eq(subscribers.cardId, cardId))
+        .where(and(eq(subscribers.organizationId, organizationId), eq(subscribers.cardId, cardId)))
         .groupBy(subscribers.source);
     },
 
-    async listActiveGoogle(cardId: string): Promise<Subscriber[]> {
+    async listActiveGoogle(organizationId: string, cardId: string): Promise<Subscriber[]> {
       return db
         .select()
         .from(subscribers)
         .where(
-          and(eq(subscribers.cardId, cardId), eq(subscribers.platform, "google"), eq(subscribers.status, "active")),
+          and(
+            eq(subscribers.organizationId, organizationId),
+            eq(subscribers.cardId, cardId),
+            eq(subscribers.platform, "google"),
+            eq(subscribers.status, "active"),
+          ),
         );
     },
 
@@ -159,13 +166,19 @@ export function createSubscriberRepository(db: Db) {
     },
 
     /** Distinct push tokens of devices holding an active pass of this card. */
-    async applePushTokensForCard(cardId: string): Promise<string[]> {
+    async applePushTokensForCard(organizationId: string, cardId: string): Promise<string[]> {
       const rows = await db
         .selectDistinct({ pushToken: appleDevices.pushToken })
         .from(appleRegistrations)
         .innerJoin(appleDevices, eq(appleDevices.deviceLibraryId, appleRegistrations.deviceLibraryId))
         .innerJoin(subscribers, eq(subscribers.serialNumber, appleRegistrations.serialNumber))
-        .where(and(eq(subscribers.cardId, cardId), eq(subscribers.status, "active")));
+        .where(
+          and(
+            eq(subscribers.organizationId, organizationId),
+            eq(subscribers.cardId, cardId),
+            eq(subscribers.status, "active"),
+          ),
+        );
       return rows.map((r) => r.pushToken);
     },
 

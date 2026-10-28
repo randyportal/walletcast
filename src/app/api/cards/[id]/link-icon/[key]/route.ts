@@ -9,7 +9,7 @@ import { normalizeContent } from "@/lib/cards/content";
 export async function GET(_request: NextRequest, ctx: RouteContext<"/api/cards/[id]/link-icon/[key]">) {
   const { id, key } = await ctx.params;
   const { cards, assets } = await getServices();
-  const card = await cards.findById(id);
+  const card = await cards.findByIdAny(id);
   if (!card) return new Response("No encontrado", { status: 404 });
   const content = normalizeContent(card);
   const iconBackground = content.config.recommendations.iconBackground || card.accentColor;

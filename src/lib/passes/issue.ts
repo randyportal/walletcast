@@ -45,8 +45,9 @@ export async function issueApplePass(
 ): Promise<Buffer> {
   if (!config.apple) throw new PlatformDisabledError("Apple Wallet");
   const limit = normalizeContent(card).config.latest.historyLimit + 1;
-  const history = previousMessages(await cards.listMessages(card.id, limit), card.latestMessage);
+  const history = previousMessages(await cards.listMessages(card.organizationId, card.id, limit), card.latestMessage);
   const subscriber = await subscribers.create({
+    organizationId: card.organizationId,
     cardId: card.id,
     platform: "apple",
     email: request.email,
@@ -72,9 +73,10 @@ export async function issueGooglePass(
 ): Promise<string> {
   if (!config.google) throw new PlatformDisabledError("Google Wallet");
   const limit = normalizeContent(card).config.latest.historyLimit + 1;
-  const history = previousMessages(await cards.listMessages(card.id, limit), card.latestMessage);
+  const history = previousMessages(await cards.listMessages(card.organizationId, card.id, limit), card.latestMessage);
   await api.upsertGenericClass(buildGenericClass(config.google.issuerId, card));
   const subscriber = await subscribers.create({
+    organizationId: card.organizationId,
     cardId: card.id,
     platform: "google",
     email: request.email,

@@ -26,6 +26,7 @@ function strip(user: User): PublicUser {
     name: user.name,
     email: user.email,
     role: user.role,
+    isPlatformAdmin: user.isPlatformAdmin,
     enabled: user.enabled,
     lastLoginAt: user.lastLoginAt,
     createdAt: user.createdAt,
@@ -39,6 +40,7 @@ export interface NewUserInput {
   email: string | null;
   role: UserRole;
   password: string;
+  isPlatformAdmin?: boolean;
 }
 
 export interface UpdateUserInput {
@@ -72,6 +74,7 @@ export function createUserRepository(db: Db) {
           name: input.name,
           email: input.email,
           role: input.role,
+          isPlatformAdmin: input.isPlatformAdmin ?? false,
           passwordHash: await hashPassword(input.password),
         })
         .returning();
@@ -113,6 +116,10 @@ export function createUserRepository(db: Db) {
         .where(eq(users.id, id))
         .returning();
       return row ? strip(row) : null;
+    },
+
+    async setPlatformAdmin(id: string, value: boolean): Promise<void> {
+      await db.update(users).set({ isPlatformAdmin: value, updatedAt: new Date() }).where(eq(users.id, id));
     },
 
     async setPassword(id: string, password: string): Promise<void> {

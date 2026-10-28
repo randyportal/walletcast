@@ -9,6 +9,8 @@ const optionalEmail = z
   .transform((v) => (v === "" ? null : v))
   .pipe(z.email().max(254).nullable());
 
+export const USER_ORG_ROLES = ["owner", "admin", "marketing", "staff", "viewer"] as const;
+
 const username = z
   .string()
   .trim()
@@ -19,7 +21,7 @@ export const UserCreateSchema = z.object({
   username,
   name: z.string().trim().min(1, "El nombre es obligatorio").max(60),
   email: optionalEmail.default(null),
-  role: z.enum(["admin", "marketing"]).default("marketing"),
+  role: z.enum(USER_ORG_ROLES).default("marketing"),
   password: z.string().min(8, "Mínimo 8 caracteres").max(200),
 });
 
@@ -27,7 +29,7 @@ export const UserUpdateSchema = z.object({
   username,
   name: z.string().trim().min(1, "El nombre es obligatorio").max(60),
   email: optionalEmail.default(null),
-  role: z.enum(["admin", "marketing"]),
+  role: z.enum(USER_ORG_ROLES),
   enabled: z.stringbool().default(true),
   password: z
     .string()

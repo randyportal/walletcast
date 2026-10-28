@@ -9,9 +9,9 @@ import { Glyph, UI_ICON_PATHS } from "@/components/icons";
 export const metadata: Metadata = { title: "Tarjetas" };
 
 export default async function DashboardPage({ searchParams }: PageProps<"/dashboard">) {
-  await requireAdmin();
+  const user = await requireAdmin();
   const { config, cards } = await getServices();
-  const list = await cards.listWithStats();
+  const list = await cards.listWithStats(user.organizationId);
   const { googleSynced, googleFailed, googleError, googleWarn } = await searchParams;
   const subscribers = list.reduce((sum, card) => sum + card.appleSubscribers + card.googleSubscribers, 0);
   const apple = list.reduce((sum, card) => sum + card.appleSubscribers, 0);

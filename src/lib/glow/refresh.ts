@@ -25,8 +25,8 @@ export async function refreshGlow(deps: RefreshGlowDeps): Promise<{ cards: numbe
   for (const card of await deps.cards.listDayGlow()) {
     if (card.glowSlot === slot) continue;
     // Bump updatedAt before pushing: devices ask what changed as soon as the push lands.
-    await deps.cards.markGlowSlot(card.id, slot, now);
-    const result = await deps.apns.sendPassUpdates(await deps.subscribers.applePushTokensForCard(card.id));
+    await deps.cards.markGlowSlot(card.organizationId, card.id, slot, now);
+    const result = await deps.apns.sendPassUpdates(await deps.subscribers.applePushTokensForCard(card.organizationId, card.id));
     await deps.subscribers.removeApplePushTokens(result.invalidTokens);
     cards += 1;
     pushed += result.sent;

@@ -37,13 +37,14 @@ export function createCardRepository(db: Db) {
   }
 
   return {
-    async create(input: CardInput, images: CardImages = {}): Promise<Card> {
+    async create(organizationId: string, input: CardInput, images: CardImages = {}): Promise<Card> {
       if (await slugExists(input.slug)) throw new SlugTakenError(input.slug);
       try {
         const [card] = await db
           .insert(cards)
           .values({
             ...input,
+            organizationId,
             logo: images.logo ?? null,
             icon: images.icon ?? null,
             backgroundImage: images.background ?? null,
@@ -58,7 +59,7 @@ export function createCardRepository(db: Db) {
       }
     },
 
-    async update(id: string, input: CardInput, images: CardImages = {}): Promise<Card | null> {
+    async update(organizationId: string, id: string, input: CardInput, images: CardImages = {}): Promise<Card | null> {
       if (await slugExists(input.slug, id)) throw new SlugTakenError(input.slug);
       const patch: Partial<NewCard> = { ...input };
       if (images.logo !== undefined) patch.logo = images.logo;
@@ -71,10 +72,9 @@ export function createCardRepository(db: Db) {
         const [card] = await tx
           .update(cards)
           .set({ ...patch, updatedAt: now })
-          .where(eq(cards.id, id))
+          .where(and(eq(cards.id, id), eq(cards.organizationId, organizationId)))
           .returning();
         if (!card) return null;
-        // Apple's "passes updated since" query looks at subscribers: mark them changed too.
         await tx
           .update(subscribers)
           .set({ updatedAt: now })
@@ -83,7 +83,16 @@ export function createCardRepository(db: Db) {
       });
     },
 
-    async findById(id: string): Promise<Card | null> {
+    async findById(organizationId: string, id: string): Promise<Card | null> {
+      if (!UUID_PATTERN.test(id)) return null;
+      const [card] = await db
+        .select()
+        .from(cards)
+        .where(and(eq(cards.id, id), eq(cards.organizationId, organizationId)));
+      return card ?? null;
+    },
+
+    async findByIdAny(id: string): Promise<Card | null> {
       if (!UUID_PATTERN.test(id)) return null;
       const [card] = await db.select().from(cards).where(eq(cards.id, id));
       return card ?? null;
@@ -94,12 +103,16 @@ export function createCardRepository(db: Db) {
       return card ?? null;
     },
 
-    async listWithStats(): Promise<CardWithStats[]> {
-      const rows = await db.select().from(cards).orderBy(desc(cards.createdAt));
+    async listWithStats(organizationId: string): Promise<CardWithStats[]> {
+      const rows = await db
+        .select()
+        .from(cards)
+        .where(eq(cards.organizationId, organizationId))
+        .orderBy(desc(cards.createdAt));
       const counts = await db
         .select({ cardId: subscribers.cardId, platform: subscribers.platform, n: count() })
         .from(subscribers)
-        .where(eq(subscribers.status, "active"))
+        .where(and(eq(subscribers.organizationId, organizationId), eq(subscribers.status, "active")))
         .groupBy(subscribers.cardId, subscribers.platform);
       return rows.map((card) => ({
         ...card,
@@ -108,17 +121,16 @@ export function createCardRepository(db: Db) {
       }));
     },
 
-    async delete(id: string): Promise<void> {
-      await db.delete(cards).where(eq(cards.id, id));
+    async delete(organizationId: string, id: string): Promise<void> {
+      await db.delete(cards).where(and(eq(cards.id, id), eq(cards.organizationId, organizationId)));
     },
 
-    /** Store the latest broadcast on the card and mark every active pass as changed. */
-    async setLatestMessage(id: string, text: string, at: Date): Promise<void> {
+    async setLatestMessage(organizationId: string, id: string, text: string, at: Date): Promise<void> {
       await db.transaction(async (tx) => {
         await tx
           .update(cards)
           .set({ latestMessage: text, latestMessageAt: at, updatedAt: at })
-          .where(eq(cards.id, id));
+          .where(and(eq(cards.id, id), eq(cards.organizationId, organizationId)));
         await tx
           .update(subscribers)
           .set({ updatedAt: at })
@@ -130,10 +142,12 @@ export function createCardRepository(db: Db) {
       return db.select().from(cards).where(eq(cards.dayGlow, true));
     },
 
-    /** Record the glow slot now on the passes and mark them changed so devices refetch. */
-    async markGlowSlot(id: string, slot: number, at: Date): Promise<void> {
+    async markGlowSlot(organizationId: string, id: string, slot: number, at: Date): Promise<void> {
       await db.transaction(async (tx) => {
-        await tx.update(cards).set({ glowSlot: slot, updatedAt: at }).where(eq(cards.id, id));
+        await tx
+          .update(cards)
+          .set({ glowSlot: slot, updatedAt: at })
+          .where(and(eq(cards.id, id), eq(cards.organizationId, organizationId)));
         await tx
           .update(subscribers)
           .set({ updatedAt: at })
@@ -141,20 +155,26 @@ export function createCardRepository(db: Db) {
       });
     },
 
-    async listMessages(cardId: string, limit = 50): Promise<Message[]> {
+    async listMessages(organizationId: string, cardId: string, limit = 50): Promise<Message[]> {
       return db
         .select()
         .from(messages)
-        .where(eq(messages.cardId, cardId))
+        .where(and(eq(messages.cardId, cardId), eq(messages.organizationId, organizationId)))
         .orderBy(desc(messages.createdAt))
         .limit(limit);
     },
 
-    async countMessagesSince(cardId: string, since: Date): Promise<number> {
+    async countMessagesSince(organizationId: string, cardId: string, since: Date): Promise<number> {
       const [row] = await db
         .select({ n: count() })
         .from(messages)
-        .where(and(eq(messages.cardId, cardId), sql`${messages.createdAt} >= ${since.toISOString()}`));
+        .where(
+          and(
+            eq(messages.cardId, cardId),
+            eq(messages.organizationId, organizationId),
+            sql`${messages.createdAt} >= ${since.toISOString()}`,
+          ),
+        );
       return row?.n ?? 0;
     },
   };

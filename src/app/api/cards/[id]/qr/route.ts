@@ -9,7 +9,7 @@ import { normaliseSource, publicCardUrl, qrPng, qrSvg } from "@/lib/cards/links"
 export async function GET(request: NextRequest, ctx: RouteContext<"/api/cards/[id]/qr">) {
   const { id } = await ctx.params;
   const { config, cards } = await getServices();
-  const card = await cards.findById(id);
+  const card = await cards.findByIdAny(id);
   if (!card) return new Response("No encontrado", { status: 404 });
 
   const params = request.nextUrl.searchParams;

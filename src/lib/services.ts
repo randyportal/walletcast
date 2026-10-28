@@ -4,6 +4,7 @@ import { createCardRepository, type CardRepository } from "@/lib/cards/repositor
 import { createAssetRepository, type AssetRepository } from "@/lib/cards/assets";
 import { createSubscriberRepository, type SubscriberRepository } from "@/lib/subscribers/repository";
 import { createUserRepository, type UserRepository } from "@/lib/users/repository";
+import { createOrganizationRepository, type OrganizationRepository } from "@/lib/organizations/repository";
 import { buildApplePass } from "@/lib/apple/pass";
 import { createApnsSender, type ApnsSender } from "@/lib/apple/apns";
 import { createAppleWebService, type AppleWebService } from "@/lib/apple/webservice";
@@ -17,6 +18,7 @@ export interface Services {
   subscribers: SubscriberRepository;
   assets: AssetRepository;
   users: UserRepository;
+  organizations: OrganizationRepository;
   apns: ApnsSender | null;
   googleApi: GoogleWalletApi | null;
   appleWebService: AppleWebService | null;
@@ -32,6 +34,7 @@ async function build(): Promise<Services> {
   const subscribers = createSubscriberRepository(db);
   const assets = createAssetRepository(db);
   const users = createUserRepository(db);
+  const organizations = createOrganizationRepository(db);
   const apple = config.apple;
   return {
     config,
@@ -40,6 +43,7 @@ async function build(): Promise<Services> {
     subscribers,
     assets,
     users,
+    organizations,
     apns: apple ? createApnsSender(apple) : null,
     googleApi: config.google ? createGoogleWalletApi(config.google) : null,
     appleWebService: apple

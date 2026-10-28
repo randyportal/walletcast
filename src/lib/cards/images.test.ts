@@ -3,6 +3,7 @@ import sharp from "sharp";
 import { createTestDb } from "@/lib/testing/db";
 import { createCardRepository } from "@/lib/cards/repository";
 import { CardInputSchema } from "@/lib/cards/validation";
+import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/constants";
 import { generateDefaultIcon, processBackgroundUpload, processFaviconUpload, renderCardHero, renderCardIcon, renderCardStrips, renderCustomLinkIcon, renderLinkIcon } from "./images";
 
 async function pngFile(w: number, h: number, type = "image/png"): Promise<File> {
@@ -10,10 +11,10 @@ async function pngFile(w: number, h: number, type = "image/png"): Promise<File> 
   return new File([new Uint8Array(buf)], "a.png", { type });
 }
 
-async function card(over: Record<string, unknown> = {}, images: Parameters<ReturnType<typeof createCardRepository>["create"]>[1] = {}) {
+async function card(over: Record<string, unknown> = {}, images: Parameters<ReturnType<typeof createCardRepository>["create"]>[2] = {}) {
   const db = await createTestDb();
   const repo = createCardRepository(db);
-  return repo.create(CardInputSchema.parse({ name: "Lu's Café", organizationName: "Lu", slug: "lus-cafe", ...over }), images);
+  return repo.create(DEFAULT_ORGANIZATION_ID, CardInputSchema.parse({ name: "Lu's Café", organizationName: "Lu", slug: "lus-cafe", ...over }), images);
 }
 
 describe("image processing", () => {

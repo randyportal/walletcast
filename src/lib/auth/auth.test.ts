@@ -3,12 +3,26 @@ import { createSessionToken, SESSION_TTL_SECONDS, sessionCookieOptions, verifySe
 import { clientIp, createRateLimiter } from "@/lib/http/rateLimit";
 
 const secret = "s".repeat(32);
-const user: SessionUser = { id: "user-1", username: "admin", name: "Admin", role: "admin" };
+const user: SessionUser = {
+  id: "user-1",
+  username: "admin",
+  name: "Admin",
+  role: "admin",
+  organizationId: "00000000-0000-0000-0000-000000000001",
+  organizationRole: "owner",
+  organizationName: "Travel Portal",
+  isPlatformAdmin: true,
+};
 
 describe("admin session", () => {
   it("round-trips a session token with the user", async () => {
     const token = await createSessionToken(secret, user);
-    expect(await verifySessionToken(token, secret)).toEqual(user);
+    expect(await verifySessionToken(token, secret)).toEqual({
+      ...user,
+      organizationRole: null,
+      organizationName: null,
+      isPlatformAdmin: false,
+    });
     expect(await verifySessionToken(token, "o".repeat(32))).toBeNull();
     expect(await verifySessionToken(undefined, secret)).toBeNull();
     expect(await verifySessionToken("garbage", secret)).toBeNull();

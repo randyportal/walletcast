@@ -21,24 +21,24 @@ export const metadata: Metadata = { title: "Tarjeta" };
 const dateFmt = new Intl.DateTimeFormat("es", { dateStyle: "medium", timeStyle: "short" });
 
 export default async function CardPage({ params, searchParams }: PageProps<"/dashboard/cards/[id]">) {
-  await requireAdmin();
+  const user = await requireAdmin();
   const { id } = await params;
   const { googleSynced, googleError, googleWarn } = await searchParams;
   const { config, cards, subscribers } = await getServices();
-  const card = await cards.findById(id);
+  const card = await cards.findById(user.organizationId, id);
   if (!card) notFound();
 
   const [stats, history, sources] = await Promise.all([
-    cards.listWithStats().then((all) => all.find((c) => c.id === id)),
-    cards.listMessages(id, 20),
-    subscribers.countBySource(id),
+    cards.listWithStats(user.organizationId).then((all) => all.find((c) => c.id === id)),
+    cards.listMessages(user.organizationId, id, 20),
+    subscribers.countBySource(user.organizationId, id),
   ]);
   const apple = stats?.appleSubscribers ?? 0;
   const google = stats?.googleSubscribers ?? 0;
   const link = publicCardUrl(config.baseUrl, card.slug);
   const content = normalizeContent(card);
   const now = new Date();
-  const googleToday = await cards.countMessagesSince(card.id, new Date(now.getTime() - 24 * 3600_000));
+  const googleToday = await cards.countMessagesSince(user.organizationId, card.id, new Date(now.getTime() - 24 * 3600_000));
   const googleRemaining = Math.max(0, GOOGLE_DAILY_NOTIFICATION_LIMIT - googleToday);
 
   return (

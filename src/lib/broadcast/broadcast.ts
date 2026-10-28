@@ -15,6 +15,7 @@ export const GOOGLE_DAILY_NOTIFICATION_LIMIT = 3;
 
 export interface BroadcastDeps {
   db: Db;
+  organizationId: string;
   baseUrl: string;
   cards: CardRepository;
   subscribers: SubscriberRepository;
@@ -48,7 +49,7 @@ export async function broadcast(
   sentBy?: string | null,
 ): Promise<BroadcastResult> {
   const now = deps.now?.() ?? new Date();
-  const card = await deps.cards.findById(cardId);
+  const card = await deps.cards.findById(deps.organizationId, cardId);
   if (!card) throw new CardNotFoundError();
 
   const warnings: string[] = [];
@@ -58,22 +59,22 @@ export async function broadcast(
   if (card.latestMessage === messageText) {
     warnings.push("El mensaje es idéntico al anterior: Apple Wallet no mostrará otra notificación.");
   }
-  if ((await deps.cards.countMessagesSince(cardId, dayAgo)) >= GOOGLE_DAILY_NOTIFICATION_LIMIT) {
+  if ((await deps.cards.countMessagesSince(deps.organizationId, cardId, dayAgo)) >= GOOGLE_DAILY_NOTIFICATION_LIMIT) {
     warnings.push(
       `Más de ${GOOGLE_DAILY_NOTIFICATION_LIMIT} mensajes en 24 h: Google Wallet puede actualizar el pase sin notificar.`,
     );
   }
 
   const content = normalizeContent(card);
-  const history = await deps.cards.listMessages(cardId, content.config.latest.historyLimit);
-  await deps.cards.setLatestMessage(cardId, messageText, now);
+  const history = await deps.cards.listMessages(deps.organizationId, cardId, content.config.latest.historyLimit);
+  await deps.cards.setLatestMessage(deps.organizationId, cardId, messageText, now);
   const updatedCard = { ...card, latestMessage: messageText, latestMessageAt: now, updatedAt: now };
 
   const sendApple = async () => {
     const result = { targets: 0, sent: 0, failed: 0 };
     const localErrors: string[] = [];
     if (deps.apns) {
-      const tokens = await deps.subscribers.applePushTokensForCard(cardId);
+      const tokens = await deps.subscribers.applePushTokensForCard(deps.organizationId, cardId);
       const pushed = await deps.apns.sendPassUpdates(tokens);
       await deps.subscribers.removeApplePushTokens(pushed.invalidTokens);
       result.targets = tokens.length;
@@ -89,7 +90,7 @@ export async function broadcast(
     const localErrors: string[] = [];
     if (!deps.google) return { result, errors: localErrors };
     const { api, issuerId } = deps.google;
-    const targets = await deps.subscribers.listActiveGoogle(cardId);
+    const targets = await deps.subscribers.listActiveGoogle(deps.organizationId, cardId);
     const patch = buildMessagePatch(updatedCard, history);
     const messageId = `m${now.getTime()}`;
     const outcomes = await mapWithConcurrency(targets, 10, async (sub) => {
@@ -122,6 +123,7 @@ export async function broadcast(
   const [message] = await deps.db
     .insert(messages)
     .values({
+      organizationId: deps.organizationId,
       cardId,
       title: input.title,
       body: input.body,
