@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { getServices } from "@/lib/services";
 import { requireUser } from "@/server/auth";
 
-export const metadata: Metadata = { title: "Send" };
+export const metadata: Metadata = { title: "Enviar" };
 
 export default async function SendPage() {
   const user = await requireUser();
@@ -13,19 +13,19 @@ export default async function SendPage() {
     <>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Send a notification</h1>
-          <p className="text-sm text-muted">Pick a card and write a message. It reaches every wallet instantly.</p>
+          <h1 className="text-2xl font-semibold">Enviar una notificación</h1>
+          <p className="text-sm text-muted">Elige una tarjeta y escribe un mensaje. Llega a todas las carteras al instante.</p>
         </div>
         {user.role === "admin" && (
           <Link href="/dashboard" className="btn-secondary">
-            Manage cards
+            Administrar tarjetas
           </Link>
         )}
       </div>
       {list.length === 0 ? (
         <div className="panel py-16 text-center">
-          <p className="text-lg font-medium">No cards yet</p>
-          <p className="mt-1 text-sm text-muted">Ask an admin to create a card first.</p>
+          <p className="text-lg font-medium">Aún no hay tarjetas</p>
+          <p className="mt-1 text-sm text-muted">Pide a un administrador que cree una tarjeta primero.</p>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -39,8 +39,8 @@ export default async function SendPage() {
               <p className="text-sm text-muted">{card.organizationName}</p>
               <p className="text-lg font-semibold">{card.name}</p>
               <p className="mt-3 text-sm text-muted">
-                {card.appleSubscribers + card.googleSubscribers} subscriber
-                {card.appleSubscribers + card.googleSubscribers === 1 ? "" : "s"}
+                {card.appleSubscribers + card.googleSubscribers} suscriptor
+                {card.appleSubscribers + card.googleSubscribers === 1 ? "" : "es"}
               </p>
             </Link>
           ))}

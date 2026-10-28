@@ -56,9 +56,9 @@ async function passJsonFor(over: Record<string, unknown>, extra: { timeZone?: st
 }
 
 describe("buildApplePass", () => {
-  it("keeps plain cards generic, labelled LATEST and without barcode", async () => {
+  it("keeps plain cards generic, labelled ÚLTIMO and without barcode", async () => {
     const { json } = await passJsonFor({});
-    expect(json.generic.secondaryFields[0].label).toBe("LATEST");
+    expect(json.generic.secondaryFields[0].label).toBe("ÚLTIMO");
     expect(json.storeCard).toBeUndefined();
     expect(json.barcodes).toBeUndefined();
     expect(JSON.stringify(json)).not.toMatch(/\u2014|—/);
@@ -101,6 +101,39 @@ describe("buildApplePass", () => {
     expect(entries).toEqual(expect.arrayContaining(["pass.json", "manifest.json", "signature", "icon.png", "icon@2x.png"]));
   });
 
+  it("supports the Apple customization options", async () => {
+    const db = await createTestDb();
+    const { generateDefaultIcon } = await import("@/lib/cards/images");
+    const appleImage = await generateDefaultIcon("A", "#000000", "#ffffff");
+    const card = await createCardRepository(db).create(
+      CardInputSchema.parse({
+        name: "Lu's Café",
+        organizationName: "Lu",
+        slug: "lu",
+        barcode: "on",
+        appleConfig: JSON.stringify({
+          showDescription: false,
+          showCustomFields: false,
+          codeText: "SOCIO 1",
+          button: { label: "Reservar", url: "https://book.example" },
+          textModules: [{ id: "t1", header: "Horario", body: "9 a 18" }],
+          imageDescription: "Portada",
+        }),
+      }),
+      { appleImage },
+    );
+    const sub = await createSubscriberRepository(db).create({ cardId: card.id, platform: "apple" });
+    const pkpass = await buildApplePass({ card, subscriber: sub, apple, baseUrl: "https://wc.test" });
+    const json = JSON.parse(zipRead(pkpass, "pass.json").toString());
+
+    expect(json.storeCard).toBeDefined();
+    expect(json.barcodes[0].altText).toBe("SOCIO 1");
+    expect(json.storeCard.backFields).toContainEqual({ key: "button", label: "Reservar", value: "https://book.example" });
+    expect(json.storeCard.backFields).toContainEqual({ key: "tm_t1", label: "Horario", value: "9 a 18" });
+    expect(json.storeCard.backFields.find((field: { key: string }) => field.key === "about")).toBeUndefined();
+    expect(zipEntries(pkpass)).toEqual(expect.arrayContaining(["strip.png", "strip@2x.png", "strip@3x.png"]));
+  });
+
   it("includes logo files when the card has a logo", async () => {
     const db = await createTestDb();
     const { generateDefaultIcon } = await import("@/lib/cards/images");
@@ -114,7 +147,7 @@ describe("buildApplePass", () => {
   it("falls back to welcome text then a default", () => {
     expect(latestMessageText({ latestMessage: "New!", welcomeText: "Hi" })).toBe("New!");
     expect(latestMessageText({ latestMessage: null, welcomeText: "Hi" })).toBe("Hi");
-    expect(latestMessageText({ latestMessage: null, welcomeText: "" })).toMatch(/updates/);
+    expect(latestMessageText({ latestMessage: null, welcomeText: "" })).toMatch(/novedades/);
   });
 });
 

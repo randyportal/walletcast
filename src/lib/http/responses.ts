@@ -36,7 +36,7 @@ export async function readFields(request: Request): Promise<Record<string, strin
 
 export const jsonError = (status: number, error: string) => Response.json({ error }, { status });
 
-export const notConfigured = () => new Response("Apple Wallet is not configured", { status: 404 });
+export const notConfigured = () => new Response("Apple Wallet no está configurado", { status: 404 });
 
 /**
  * Error for the public "add to wallet" endpoints: JSON for API clients,

@@ -30,6 +30,14 @@ export const LINK_ICON_PATHS: Record<LinkIcon, string> = {
     '<rect width="20" height="20" x="2" y="2" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/>',
   calendar:
     '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
-  bag: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>',
-  star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  bag: ICON_PATHS.bag,
+  star: ICON_PATHS.star,
+  contact: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  ticket: ICON_PATHS.ticket,
+  heart: ICON_PATHS.heart,
+  coffee: ICON_PATHS.coffee,
+  crown: ICON_PATHS.crown,
+  sparkles: ICON_PATHS.sparkles,
+  leaf: ICON_PATHS.leaf,
+  bolt: ICON_PATHS.bolt,
 };

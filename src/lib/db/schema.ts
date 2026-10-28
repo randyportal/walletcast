@@ -11,6 +11,8 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { CardField, CardLink } from "@/lib/cards/design";
+import { DEFAULT_GOOGLE_CONFIG, type GoogleConfig } from "@/lib/cards/google";
+import { DEFAULT_APPLE_CONFIG, type AppleConfig } from "@/lib/cards/apple";
 
 /** Binary column (PNG images). PGlite returns Uint8Array, postgres-js Buffer: normalise to Buffer. */
 const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
@@ -66,8 +68,28 @@ export const cards = pgTable("cards", {
   barcodeType: text("barcode_type").notNull().default("qr"),
   barcodeContent: text("barcode_content").notNull().default("link"),
   barcodeValue: text("barcode_value"),
+  googleConfig: jsonb("google_config").$type<GoogleConfig>().notNull().default(DEFAULT_GOOGLE_CONFIG),
+  appleConfig: jsonb("apple_config").$type<AppleConfig>().notNull().default(DEFAULT_APPLE_CONFIG),
+  appleImage: bytea("apple_image"),
+  publicPageMode: text("public_page_mode").notNull().default("full"),
+  askEmail: boolean("ask_email").notNull().default(true),
   ...timestamps,
 });
+
+export const cardAssets = pgTable(
+  "card_assets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cardId: uuid("card_id")
+      .notNull()
+      .references(() => cards.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    mime: text("mime").notNull().default("image/png"),
+    data: bytea("data").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("card_assets_card_idx").on(t.cardId)],
+);
 
 export const PLATFORMS = ["apple", "google"] as const;
 export type Platform = (typeof PLATFORMS)[number];
@@ -149,6 +171,7 @@ export const users = pgTable("users", {
 
 export type Card = typeof cards.$inferSelect;
 export type NewCard = typeof cards.$inferInsert;
+export type CardAsset = typeof cardAssets.$inferSelect;
 export type Subscriber = typeof subscribers.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type User = typeof users.$inferSelect;

@@ -40,6 +40,14 @@ export const LINK_ICONS = [
   "calendar",
   "bag",
   "star",
+  "contact",
+  "ticket",
+  "heart",
+  "coffee",
+  "crown",
+  "sparkles",
+  "leaf",
+  "bolt",
 ] as const;
 export type LinkIcon = (typeof LINK_ICONS)[number];
 
@@ -61,6 +69,7 @@ export interface CardLink {
   url: string;
   icon: LinkIcon;
   style: LinkStyle;
+  iconAssetId?: string | null;
 }
 
 export interface CardField {
@@ -73,7 +82,7 @@ export interface CardField {
 export const hexColor = z
   .string()
   .trim()
-  .regex(/^#[0-9a-fA-F]{6}$/, "Use a 6-digit hex color like #1a2b3c");
+  .regex(/^#[0-9a-fA-F]{6}$/, "Usa un color hex de 6 dígitos, por ejemplo #1a2b3c");
 
 export const optionalHex = z
   .string()
@@ -91,16 +100,17 @@ function allowedLink(value: string): boolean {
 
 export const CardLinkSchema = z.object({
   id: z.string().min(1).max(20),
-  label: z.string().trim().min(1, "Label is required").max(24),
-  url: z.string().trim().min(1, "URL is required").max(500).refine(allowedLink, "Use an http(s), mailto or tel link"),
+  label: z.string().trim().min(1, "La etiqueta es obligatoria").max(24),
+  url: z.string().trim().min(1, "La URL es obligatoria").max(500).refine(allowedLink, "Usa un enlace http(s), mailto o tel"),
   icon: z.enum(LINK_ICONS).default("link"),
   style: z.enum(LINK_STYLES).default("secondary"),
+  iconAssetId: z.string().min(1).max(64).nullable().default(null),
 });
 
 export const CardFieldSchema = z.object({
   id: z.string().min(1).max(20),
-  label: z.string().trim().min(1, "Label is required").max(16),
-  value: z.string().trim().min(1, "Value is required").max(60),
+  label: z.string().trim().min(1, "La etiqueta es obligatoria").max(16),
+  value: z.string().trim().min(1, "El valor es obligatorio").max(60),
   location: z.enum(FIELD_LOCATIONS).default("back"),
 });
 
@@ -111,7 +121,7 @@ export const LinksSchema = z.preprocess((v) => {
   } catch {
     return v;
   }
-}, z.array(CardLinkSchema).max(6, "Up to 6 buttons"));
+}, z.array(CardLinkSchema).max(6, "Máximo 6 botones"));
 
 export const CustomFieldsSchema = z.preprocess((v) => {
   if (typeof v !== "string" || v.trim() === "") return [];
@@ -120,7 +130,7 @@ export const CustomFieldsSchema = z.preprocess((v) => {
   } catch {
     return v;
   }
-}, z.array(CardFieldSchema).max(8, "Up to 8 fields"));
+}, z.array(CardFieldSchema).max(8, "Máximo 8 campos"));
 
 export function isHeroBackground(type: BackgroundType | string | null | undefined): boolean {
   return type === "linear" || type === "radial" || type === "image";

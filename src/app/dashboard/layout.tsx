@@ -10,7 +10,7 @@ export default async function DashboardLayout({ children }: LayoutProps<"/dashbo
       <header className="border-b border-border bg-surface">
         <nav className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-3 text-sm">
           <Link href={admin ? "/dashboard" : "/dashboard/send"} className="font-semibold">
-            WalletCast
+            Travel Portal Wallet Card
           </Link>
           {admin && (
             <>
@@ -36,10 +36,10 @@ export default async function DashboardLayout({ children }: LayoutProps<"/dashbo
           <div className="ml-auto flex items-center gap-4">
             <span className="text-xs text-muted">
               {user.name || user.username}
-              {admin ? " · Admin" : " · Marketing"}
+              {admin ? " · Administrador" : " · Marketing"}
             </span>
             <form action={logoutAction}>
-              <button className="text-muted hover:text-foreground">Sign out</button>
+              <button className="text-muted hover:text-foreground">Cerrar sesión</button>
             </form>
           </div>
         </nav>

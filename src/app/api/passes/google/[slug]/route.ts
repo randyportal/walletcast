@@ -12,14 +12,14 @@ const limiter = createRateLimiter({ limit: 20, windowMs: 60_000 });
  */
 export async function POST(request: NextRequest, ctx: RouteContext<"/api/passes/google/[slug]">) {
   const { slug } = await ctx.params;
-  if (!limiter.hit(clientIp(request.headers))) return publicError(request, slug, 429, "Too many requests, try again in a minute.");
+  if (!limiter.hit(clientIp(request.headers))) return publicError(request, slug, 429, "Demasiadas solicitudes. Inténtalo de nuevo en un minuto.");
   const { config, cards, subscribers, googleApi } = await getServices();
   const card = await cards.findBySlug(slug);
-  if (!card) return jsonError(404, "Card not found");
-  if (!googleApi) return publicError(request, slug, 404, "Google Wallet is not configured");
+  if (!card) return jsonError(404, "Tarjeta no encontrada");
+  if (!googleApi) return publicError(request, slug, 404, "Google Wallet no está configurado");
 
   const parsed = IssueRequestSchema.safeParse(await readFields(request));
-  if (!parsed.success) return publicError(request, slug, 400, "Invalid email address");
+  if (!parsed.success) return publicError(request, slug, 400, "Correo electrónico inválido");
 
   try {
     const url = await issueGooglePass(config, subscribers, googleApi, card, parsed.data);
@@ -28,6 +28,6 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/passes/
   } catch (error) {
     if (error instanceof PlatformDisabledError) return publicError(request, slug, 404, error.message);
     console.error("[walletcast] google pass issue failed", error);
-    return publicError(request, slug, 502, "Could not create the Google Wallet pass");
+    return publicError(request, slug, 502, "No se pudo crear el pase de Google Wallet");
   }
 }

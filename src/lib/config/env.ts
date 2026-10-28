@@ -44,7 +44,7 @@ const EnvSchema = z.object({
       } catch {
         return false;
       }
-    }, "GLOW_TIMEZONE must be an IANA time zone like Europe/Rome"),
+    }, "GLOW_TIMEZONE debe ser una zona IANA como Europe/Rome"),
   CRON_SECRET: optionalString,
 });
 
@@ -120,7 +120,7 @@ function parseApple(raw: RawEnv, warnings: string[]): AppleConfig | null {
   if (present.length === 0) return null;
   if (present.length < keys.length) {
     const missing = keys.filter((k) => !raw[k]);
-    warnings.push(`Apple Wallet disabled: missing ${missing.join(", ")}`);
+    warnings.push(`Apple Wallet deshabilitado: faltan ${missing.join(", ")}`);
     return null;
   }
   return {
@@ -138,19 +138,19 @@ function parseGoogle(raw: RawEnv, warnings: string[]): GoogleConfig | null {
   if (!issuerId && !json) return null;
   if (!issuerId || !json) {
     warnings.push(
-      "Google Wallet disabled: set both GOOGLE_ISSUER_ID and GOOGLE_SERVICE_ACCOUNT_JSON",
+      "Google Wallet deshabilitado: configura GOOGLE_ISSUER_ID y GOOGLE_SERVICE_ACCOUNT_JSON",
     );
     return null;
   }
   try {
     const parsed = ServiceAccountSchema.safeParse(decodeJson(json));
     if (!parsed.success) {
-      warnings.push("Google Wallet disabled: GOOGLE_SERVICE_ACCOUNT_JSON is not a valid service account key");
+      warnings.push("Google Wallet deshabilitado: GOOGLE_SERVICE_ACCOUNT_JSON no es una clave de cuenta de servicio válida");
       return null;
     }
     return { issuerId, serviceAccount: parsed.data };
   } catch {
-    warnings.push("Google Wallet disabled: GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON");
+    warnings.push("Google Wallet deshabilitado: GOOGLE_SERVICE_ACCOUNT_JSON no es JSON válido");
     return null;
   }
 }
@@ -160,11 +160,11 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
   const warnings: string[] = [];
 
   if (raw.SESSION_SECRET && raw.SESSION_SECRET.length < 32) {
-    throw new Error("SESSION_SECRET must be at least 32 characters");
+    throw new Error("SESSION_SECRET debe tener al menos 32 caracteres");
   }
   if (raw.NODE_ENV === "production") {
-    if (!raw.ADMIN_PASSWORD) warnings.push("ADMIN_PASSWORD is not set: the dashboard is locked");
-    if (!raw.SESSION_SECRET) warnings.push("SESSION_SECRET is not set: the dashboard is locked");
+    if (!raw.ADMIN_PASSWORD) warnings.push("ADMIN_PASSWORD no está configurado: el panel está bloqueado");
+    if (!raw.SESSION_SECRET) warnings.push("SESSION_SECRET no está configurado: el panel está bloqueado");
   }
 
   return {

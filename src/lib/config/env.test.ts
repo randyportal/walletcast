@@ -58,16 +58,16 @@ describe("parseConfig", () => {
   it("warns on invalid Google JSON", () => {
     const config = parseConfig({ GOOGLE_ISSUER_ID: "1", GOOGLE_SERVICE_ACCOUNT_JSON: "{nope" });
     expect(config.google).toBeNull();
-    expect(config.warnings[0]).toMatch(/not valid JSON/);
+    expect(config.warnings[0]).toMatch(/no es JSON válido/);
   });
 
   it("warns on a service account missing fields", () => {
     const config = parseConfig({ GOOGLE_ISSUER_ID: "1", GOOGLE_SERVICE_ACCOUNT_JSON: "{}" });
-    expect(config.warnings[0]).toMatch(/not a valid service account/);
+    expect(config.warnings[0]).toMatch(/no es una clave de cuenta de servicio válida/);
   });
 
   it("warns when only one Google var is set", () => {
-    expect(parseConfig({ GOOGLE_ISSUER_ID: "1" }).warnings[0]).toMatch(/both/);
+    expect(parseConfig({ GOOGLE_ISSUER_ID: "1" }).warnings[0]).toMatch(/GOOGLE_ISSUER_ID y GOOGLE_SERVICE_ACCOUNT_JSON/);
   });
 
   it("warns in production without admin credentials", () => {

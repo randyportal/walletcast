@@ -1,0 +1,2 @@
+ALTER TABLE "cards" ADD COLUMN "apple_config" jsonb DEFAULT '{"showDescription":true,"showCustomFields":true,"codeText":"","button":null,"textModules":[],"imageDescription":""}'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "cards" ADD COLUMN "apple_image" "bytea";

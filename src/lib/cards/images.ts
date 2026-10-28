@@ -1,12 +1,15 @@
 import sharp, { type OverlayOptions } from "sharp";
 import type { Card } from "@/lib/db/schema";
-import { type IconPreset, type IconShape } from "./design";
-import { ICON_PATHS } from "./icon-paths";
+import { type IconPreset, type IconShape, type LinkIcon } from "./design";
+import { ICON_PATHS, LINK_ICON_PATHS } from "./icon-paths";
 import { renderStrips } from "@/lib/glow/strip";
 
 export const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 export const MAX_BACKGROUND_BYTES = 6 * 1024 * 1024;
 export const MAX_FAVICON_BYTES = 1 * 1024 * 1024;
+export const MAX_LINK_ICON_BYTES = 512 * 1024;
+export const MAX_MODULE_IMAGE_BYTES = 2 * 1024 * 1024;
+export const MAX_IMAGE_MODULE_BYTES = 3 * 1024 * 1024;
 const ACCEPTED_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 export class ImageUploadError extends Error {
@@ -23,6 +26,10 @@ export const ICON_MASTER = { width: 87, height: 87 };
 export const BACKGROUND_MASTER = { width: 1600, height: 900 };
 export const FAVICON_MASTER = { width: 180, height: 180 };
 export const HERO_MASTER = { width: 1032, height: 336 };
+export const LINK_ICON_MASTER = { width: 256, height: 256 };
+export const MODULE_IMAGE_MASTER = { width: 512, height: 512 };
+export const IMAGE_MODULE_MASTER = { width: 1032, height: 336 };
+export const APPLE_IMAGE_MASTER = { width: 1032, height: 336 };
 
 const STRIP_SIZES = [
   { file: "strip.png", width: 375, height: 123 },
@@ -31,8 +38,8 @@ const STRIP_SIZES = [
 ];
 
 async function readUpload(file: File, maxBytes: number): Promise<Buffer> {
-  if (!ACCEPTED_TYPES.has(file.type)) throw new ImageUploadError("Upload a PNG, JPEG or WebP image");
-  if (file.size > maxBytes) throw new ImageUploadError(`Images must be ${Math.round(maxBytes / 1024 / 1024)} MB or less`);
+  if (!ACCEPTED_TYPES.has(file.type)) throw new ImageUploadError("Sube una imagen PNG, JPEG o WebP");
+  if (file.size > maxBytes) throw new ImageUploadError(`La imagen debe pesar ${Math.round(maxBytes / 1024 / 1024)} MB o menos`);
   return Buffer.from(await file.arrayBuffer());
 }
 
@@ -45,7 +52,7 @@ export async function processLogoUpload(file: File | null): Promise<Buffer | und
       .png()
       .toBuffer();
   } catch {
-    throw new ImageUploadError("This image could not be read");
+    throw new ImageUploadError("No se pudo leer esta imagen");
   }
 }
 
@@ -55,7 +62,7 @@ export async function processIconUpload(file: File | null): Promise<Buffer | und
   try {
     return await sharp(input, SHARP_OPTIONS).resize({ ...ICON_MASTER, fit: "cover" }).png().toBuffer();
   } catch {
-    throw new ImageUploadError("This image could not be read");
+    throw new ImageUploadError("No se pudo leer esta imagen");
   }
 }
 
@@ -68,7 +75,7 @@ export async function processBackgroundUpload(file: File | null): Promise<Buffer
       .webp({ quality: 82 })
       .toBuffer();
   } catch {
-    throw new ImageUploadError("This image could not be read");
+    throw new ImageUploadError("No se pudo leer esta imagen");
   }
 }
 
@@ -81,7 +88,56 @@ export async function processFaviconUpload(file: File | null): Promise<Buffer | 
       .png()
       .toBuffer();
   } catch {
-    throw new ImageUploadError("This image could not be read");
+    throw new ImageUploadError("No se pudo leer esta imagen");
+  }
+}
+
+export async function processLinkIconUpload(file: File | null): Promise<Buffer | undefined> {
+  if (!file || file.size === 0) return undefined;
+  const input = await readUpload(file, MAX_LINK_ICON_BYTES);
+  try {
+    return await sharp(input, SHARP_OPTIONS).resize({ ...LINK_ICON_MASTER, fit: "cover" }).png().toBuffer();
+  } catch {
+    throw new ImageUploadError("No se pudo leer esta imagen");
+  }
+}
+
+export async function processModuleImageUpload(file: File | null): Promise<Buffer | undefined> {
+  if (!file || file.size === 0) return undefined;
+  const input = await readUpload(file, MAX_MODULE_IMAGE_BYTES);
+  try {
+    return await sharp(input, SHARP_OPTIONS)
+      .resize({ ...MODULE_IMAGE_MASTER, fit: "cover" })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+  } catch {
+    throw new ImageUploadError("No se pudo leer esta imagen");
+  }
+}
+
+export async function processImageModuleUpload(file: File | null): Promise<Buffer | undefined> {
+  if (!file || file.size === 0) return undefined;
+  const input = await readUpload(file, MAX_IMAGE_MODULE_BYTES);
+  try {
+    return await sharp(input, SHARP_OPTIONS)
+      .resize({ ...IMAGE_MODULE_MASTER, fit: "cover" })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+  } catch {
+    throw new ImageUploadError("No se pudo leer esta imagen");
+  }
+}
+
+export async function processAppleImageUpload(file: File | null): Promise<Buffer | undefined> {
+  if (!file || file.size === 0) return undefined;
+  const input = await readUpload(file, MAX_IMAGE_MODULE_BYTES);
+  try {
+    return await sharp(input, SHARP_OPTIONS)
+      .resize({ ...APPLE_IMAGE_MASTER, fit: "cover" })
+      .png()
+      .toBuffer();
+  } catch {
+    throw new ImageUploadError("No se pudo leer esta imagen");
   }
 }
 
@@ -137,6 +193,20 @@ export async function renderCardIcon(card: Pick<Card, "name" | "bgColor" | "fgCo
     return sharp(glyphSvg(preset, card.bgColor, card.fgColor, card.iconShape as IconShape), SHARP_OPTIONS).resize(size, size).png().toBuffer();
   }
   return sharp(monogramSvg(monogram, card.bgColor, card.fgColor, card.iconShape as IconShape), SHARP_OPTIONS).resize(size, size).png().toBuffer();
+}
+
+export async function renderLinkIcon(
+  icon: LinkIcon,
+  bgColor: string,
+  fgColor: string,
+  size = LINK_ICON_MASTER.width,
+): Promise<Buffer> {
+  const path = LINK_ICON_PATHS[icon] ?? LINK_ICON_PATHS.link;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${LINK_ICON_MASTER.width}" height="${LINK_ICON_MASTER.height}">
+    <circle cx="${LINK_ICON_MASTER.width / 2}" cy="${LINK_ICON_MASTER.height / 2}" r="${LINK_ICON_MASTER.width / 2}" fill="${bgColor}"/>
+    <g transform="translate(64 64) scale(5.3333333)" fill="none" stroke="${fgColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</g>
+  </svg>`;
+  return sharp(Buffer.from(svg), SHARP_OPTIONS).resize(size, size).png().toBuffer();
 }
 
 export async function resizePng(input: Buffer, width: number, height: number, fit: "inside" | "cover"): Promise<Buffer> {
@@ -204,6 +274,16 @@ async function imageDesign(
     composites.push({ input: fadeSvg });
   }
   return sharp(base).composite(composites).png().toBuffer();
+}
+
+export async function renderImageStrips(image: Buffer): Promise<Record<string, Buffer>> {
+  const entries = await Promise.all(
+    STRIP_SIZES.map(async ({ file, width, height }) => {
+      const png = await sharp(image, SHARP_OPTIONS).resize(width, height, { fit: "cover" }).png().toBuffer();
+      return [file, png] as const;
+    }),
+  );
+  return Object.fromEntries(entries);
 }
 
 export async function renderCardStrips(

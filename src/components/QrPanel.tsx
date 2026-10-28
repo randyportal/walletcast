@@ -16,19 +16,19 @@ export function QrPanel({ cardId, baseLink }: { cardId: string; baseLink: string
         <CopyButton text={link} />
       </div>
       <label className="block">
-        <span className="field-label">Placement tag (optional)</span>
-        <input className="input" placeholder="e.g. window, flyer, receipt" value={source} onChange={(e) => setSource(e.target.value)} />
-        <p className="field-hint">Letters, digits, dashes. Lets you see which QR code brings the most people.</p>
+        <span className="field-label">Etiqueta de origen (opcional)</span>
+        <input className="input" placeholder="por ejemplo: ventana, volante, recibo" value={source} onChange={(e) => setSource(e.target.value)} />
+        <p className="field-hint">Letras, números y guiones. Te permite ver qué QR trae más personas.</p>
       </label>
       <div className="flex items-end gap-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`/api/cards/${cardId}/qr?${qs}`} alt="QR code" className="h-36 w-36 rounded-lg border border-border bg-white" />
+        <img src={`/api/cards/${cardId}/qr?${qs}`} alt="Código QR" className="h-36 w-36 rounded-lg border border-border bg-white" />
         <div className="flex flex-col gap-2">
           <a className="btn-secondary" href={`/api/cards/${cardId}/qr?${qs}download`}>
-            Download PNG
+            Descargar PNG
           </a>
           <a className="btn-secondary" href={`/api/cards/${cardId}/qr?${qs}format=svg&download`}>
-            Download SVG
+            Descargar SVG
           </a>
         </div>
       </div>

@@ -8,10 +8,9 @@ export function IntegrationBanner({ config }: { config: AppConfig }) {
     <div className="mb-6 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm">
       {missing.length > 0 && (
         <p>
-          <strong>{missing.join(" and ")}</strong> {missing.length > 1 ? "are" : "is"} not configured yet, so those
-          buttons are hidden on your public pages.{" "}
+          <strong>{missing.join(" y ")}</strong> {missing.length > 1 ? "no están configurados" : "no está configurado"} todavía, así que esos botones están ocultos en tus páginas públicas.{" "}
           <Link href="/dashboard/settings" className="underline">
-            How to set it up
+            Cómo configurarlo
           </Link>
         </p>
       )}

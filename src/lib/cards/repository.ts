@@ -20,6 +20,7 @@ export interface CardImages {
   icon?: Buffer | null;
   background?: Buffer | null;
   favicon?: Buffer | null;
+  appleImage?: Buffer | null;
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -47,6 +48,7 @@ export function createCardRepository(db: Db) {
             icon: images.icon ?? null,
             backgroundImage: images.background ?? null,
             favicon: images.favicon ?? null,
+            appleImage: images.appleImage ?? null,
           })
           .returning();
         return card;
@@ -63,6 +65,7 @@ export function createCardRepository(db: Db) {
       if (images.icon !== undefined) patch.icon = images.icon;
       if (images.background !== undefined) patch.backgroundImage = images.background;
       if (images.favicon !== undefined) patch.favicon = images.favicon;
+      if (images.appleImage !== undefined) patch.appleImage = images.appleImage;
       const now = new Date();
       return db.transaction(async (tx) => {
         const [card] = await tx

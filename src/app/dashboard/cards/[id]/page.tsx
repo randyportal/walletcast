@@ -4,19 +4,22 @@ import { getServices } from "@/lib/services";
 import { publicCardUrl } from "@/lib/cards/links";
 import { imageUrl } from "@/lib/google/objects";
 import { glowSlot, slotHue } from "@/lib/glow/hue";
+import { normalizeGoogleConfig } from "@/lib/cards/google";
+import { normalizeAppleConfig } from "@/lib/cards/apple";
 import { CardForm } from "@/components/CardForm";
 import { SendForm } from "@/components/SendForm";
 import { QrPanel } from "@/components/QrPanel";
-import { deleteCardAction, sendMessageAction, updateCardAction } from "@/server/actions";
+import { deleteCardAction, sendMessageAction, syncGoogleCardAction, updateCardAction } from "@/server/actions";
 import { requireAdmin } from "@/server/auth";
 
-export const metadata: Metadata = { title: "Card" };
+export const metadata: Metadata = { title: "Tarjeta" };
 
-const dateFmt = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" });
+const dateFmt = new Intl.DateTimeFormat("es", { dateStyle: "medium", timeStyle: "short" });
 
-export default async function CardPage({ params }: PageProps<"/dashboard/cards/[id]">) {
+export default async function CardPage({ params, searchParams }: PageProps<"/dashboard/cards/[id]">) {
   await requireAdmin();
   const { id } = await params;
+  const { googleSynced, googleError, googleWarn } = await searchParams;
   const { config, cards, subscribers } = await getServices();
   const card = await cards.findById(id);
   if (!card) notFound();
@@ -38,29 +41,38 @@ export default async function CardPage({ params }: PageProps<"/dashboard/cards/[
           <h1 className="text-2xl font-semibold">{card.name}</h1>
         </div>
         <a href={link} target="_blank" className="btn-secondary" rel="noreferrer">
-          Open public page ↗
+          Abrir página pública ↗
         </a>
+        {config.google && (
+          <form action={syncGoogleCardAction.bind(null, card.id)}>
+            <button className="btn-secondary">Sincronizar pases Google</button>
+          </form>
+        )}
       </div>
+
+      {googleSynced === "1" && <p className="text-sm text-success">Pases de Google actualizados.</p>}
+      {googleError === "not-configured" && <p className="text-sm text-warning">Google Wallet no está configurado en este servidor.</p>}
+      {typeof googleWarn === "string" && <p className="text-sm text-warning">{googleWarn}</p>}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="panel">
-          <h2 className="mb-1 text-lg font-semibold">Send a notification</h2>
+          <h2 className="mb-1 text-lg font-semibold">Enviar una notificación</h2>
           <p className="mb-4 text-sm text-muted">
-            Appears on the lock screen of everyone who has the card, and stays on the card as the latest message.
+            Aparece en la pantalla de bloqueo de todos los que tienen la tarjeta y queda como el último mensaje.
           </p>
           <SendForm action={sendMessageAction.bind(null, card.id)} subscriberCount={apple + google} />
         </section>
 
         <section className="panel">
-          <h2 className="mb-1 text-lg font-semibold">Share</h2>
-          <p className="mb-4 text-sm text-muted">Print the QR code or share the link. One tap adds the card.</p>
+          <h2 className="mb-1 text-lg font-semibold">Compartir</h2>
+          <p className="mb-4 text-sm text-muted">Imprime el código QR o comparte el enlace. Se agrega con un toque.</p>
           <QrPanel cardId={card.id} baseLink={link} />
         </section>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <section className="panel">
-          <h2 className="mb-4 text-lg font-semibold">Subscribers</h2>
+          <h2 className="mb-4 text-lg font-semibold">Suscriptores</h2>
           <p className="text-3xl font-semibold">{apple + google}</p>
           <p className="text-sm text-muted">
             {apple} Apple Wallet · {google} Google Wallet
@@ -69,14 +81,14 @@ export default async function CardPage({ params }: PageProps<"/dashboard/cards/[
             <table className="mt-4 w-full text-sm">
               <thead>
                 <tr className="text-left text-muted">
-                  <th className="font-normal">Placement</th>
-                  <th className="text-right font-normal">Added</th>
+                  <th className="font-normal">Origen</th>
+                  <th className="text-right font-normal">Agregados</th>
                 </tr>
               </thead>
               <tbody>
                 {sources.map((s) => (
                   <tr key={s.source ?? "direct"}>
-                    <td>{s.source ?? "direct link"}</td>
+                    <td>{s.source ?? "enlace directo"}</td>
                     <td className="text-right">{s.n}</td>
                   </tr>
                 ))}
@@ -84,14 +96,14 @@ export default async function CardPage({ params }: PageProps<"/dashboard/cards/[
             </table>
           )}
           <a href={`/api/cards/${card.id}/subscribers.csv`} className="btn-secondary mt-4">
-            Export CSV
+            Exportar CSV
           </a>
         </section>
 
         <section className="panel lg:col-span-2">
-          <h2 className="mb-4 text-lg font-semibold">History</h2>
+          <h2 className="mb-4 text-lg font-semibold">Historial</h2>
           {history.length === 0 ? (
-            <p className="text-sm text-muted">No notification sent yet.</p>
+            <p className="text-sm text-muted">Aún no se ha enviado ninguna notificación.</p>
           ) : (
             <ul className="divide-y divide-border">
               {history.map((m) => (
@@ -101,10 +113,10 @@ export default async function CardPage({ params }: PageProps<"/dashboard/cards/[
                     <p className="shrink-0 text-xs text-muted">{dateFmt.format(m.createdAt)}</p>
                   </div>
                   <p className="text-sm">{m.body}</p>
-                  {m.sentBy && <p className="text-xs text-muted">Sent by {m.sentBy}</p>}
+                  {m.sentBy && <p className="text-xs text-muted">Enviado por {m.sentBy}</p>}
                   <p className="mt-1 text-xs text-muted">
                     Apple {m.appleSent}/{m.appleTargets} · Google {m.googleSent}/{m.googleTargets}
-                    {m.appleFailed + m.googleFailed > 0 && ` · ${m.appleFailed + m.googleFailed} failed`}
+                    {m.appleFailed + m.googleFailed > 0 && ` · ${m.appleFailed + m.googleFailed} fallidos`}
                   </p>
                 </li>
               ))}
@@ -114,10 +126,10 @@ export default async function CardPage({ params }: PageProps<"/dashboard/cards/[
       </div>
 
       <section className="panel">
-        <h2 className="mb-6 text-lg font-semibold">Design & details</h2>
+        <h2 className="mb-6 text-lg font-semibold">Diseño y detalles</h2>
         <CardForm
           action={updateCardAction.bind(null, card.id)}
-          submitLabel="Save changes"
+          submitLabel="Guardar cambios"
           latestMessage={card.latestMessage}
           qrUrl={`/api/cards/${card.id}/qr?src=pass`}
           glowHue={slotHue(glowSlot(new Date(), config.glowTimeZone))}
@@ -125,6 +137,8 @@ export default async function CardPage({ params }: PageProps<"/dashboard/cards/[
           existingIconUrl={imageUrl("", card, "icon")}
           existingBackgroundUrl={card.backgroundImage ? `/api/cards/${card.id}/image/background?v=${card.updatedAt.getTime()}` : null}
           existingFaviconUrl={card.favicon ? `/api/cards/${card.id}/image/favicon?v=${card.updatedAt.getTime()}` : null}
+          existingAppleImageUrl={card.appleImage ? `/api/cards/${card.id}/image/apple-image?v=${card.updatedAt.getTime()}` : null}
+          cardId={card.id}
           initial={{
             name: card.name,
             organizationName: card.organizationName,
@@ -160,17 +174,21 @@ export default async function CardPage({ params }: PageProps<"/dashboard/cards/[
             dayGlow: card.dayGlow,
             links: card.links,
             customFields: card.customFields,
+            googleConfig: normalizeGoogleConfig(card.googleConfig),
+            appleConfig: normalizeAppleConfig(card.appleConfig),
+            publicPageMode: card.publicPageMode,
+            askEmail: card.askEmail,
           }}
         />
       </section>
 
       <section className="panel border-danger/40">
-        <h2 className="mb-1 text-lg font-semibold">Delete card</h2>
+        <h2 className="mb-1 text-lg font-semibold">Eliminar tarjeta</h2>
         <p className="mb-4 text-sm text-muted">
-          Removes the card, its subscribers and history. Passes already in wallets stop updating.
+          Elimina la tarjeta, sus suscriptores y el historial. Los pases que ya están en las carteras dejan de actualizarse.
         </p>
         <form action={deleteCardAction.bind(null, card.id)}>
-          <button className="btn-danger">Delete permanently</button>
+          <button className="btn-danger">Eliminar permanentemente</button>
         </form>
       </section>
     </div>

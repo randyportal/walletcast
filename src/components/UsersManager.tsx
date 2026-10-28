@@ -13,7 +13,7 @@ export interface UserRow {
   lastLoginAt: string | null;
 }
 
-const roleLabel = (role: string) => (role === "admin" ? "Admin" : "Marketing");
+const roleLabel = (role: string) => (role === "admin" ? "Administrador" : "Marketing");
 
 function fieldError(fieldErrors: Record<string, string> | undefined, key: string) {
   return fieldErrors?.[key] ? <p className="mt-1 text-xs text-danger">{fieldErrors[key]}</p> : null;
@@ -32,35 +32,35 @@ function UserFields({
     <>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="field-label">Name</span>
+          <span className="field-label">Nombre</span>
           <input name="name" className="input" required maxLength={60} defaultValue={initial.name} />
           {fieldError(errors, "name")}
         </label>
         <label className="block">
-          <span className="field-label">Username</span>
+          <span className="field-label">Usuario</span>
           <input name="username" className="input" required maxLength={32} defaultValue={initial.username} />
           {fieldError(errors, "username")}
         </label>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="field-label">Email (optional)</span>
+          <span className="field-label">Correo (opcional)</span>
           <input name="email" type="email" className="input" defaultValue={initial.email} />
           {fieldError(errors, "email")}
         </label>
         <label className="block">
-          <span className="field-label">Role</span>
+          <span className="field-label">Rol</span>
           <select name="role" className="input" defaultValue={initial.role ?? "marketing"}>
             <option value="marketing">Marketing</option>
-            <option value="admin">Admin</option>
+            <option value="admin">Administrador</option>
           </select>
         </label>
       </div>
       {showPassword && (
         <label className="block">
-          <span className="field-label">Password</span>
+          <span className="field-label">Contraseña</span>
           <input name="password" type="password" className="input" minLength={8} autoComplete="new-password" />
-          <p className="field-hint">At least 8 characters.</p>
+          <p className="field-hint">Mínimo 8 caracteres.</p>
           {fieldError(errors, "password")}
         </label>
       )}
@@ -73,19 +73,19 @@ export function UsersManager({ users, currentUserId }: { users: UserRow[]; curre
   return (
     <div className="space-y-6">
       <section className="panel space-y-4">
-        <h2 className="text-lg font-semibold">Add user</h2>
+        <h2 className="text-lg font-semibold">Agregar usuario</h2>
         <CreateUserForm />
       </section>
 
       <section className="panel">
-        <h2 className="mb-4 text-lg font-semibold">Users</h2>
+        <h2 className="mb-4 text-lg font-semibold">Usuarios</h2>
         <div className="space-y-4">
           {users.map((u) => (
             <div key={u.id} className="rounded-lg border border-border p-4">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">
-                    {u.name} {u.id === currentUserId && <span className="text-xs text-muted">(you)</span>}
+                    {u.name} {u.id === currentUserId && <span className="text-xs text-muted">(tú)</span>}
                   </p>
                   <p className="text-sm text-muted">
                     @{u.username}
@@ -94,9 +94,9 @@ export function UsersManager({ users, currentUserId }: { users: UserRow[]; curre
                   <p className="mt-1 flex flex-wrap gap-2 text-xs text-muted">
                     <span className="badge">{roleLabel(u.role)}</span>
                     <span className={`badge ${u.enabled ? "text-success" : "text-warning"}`}>
-                      {u.enabled ? "Active" : "Disabled"}
+                      {u.enabled ? "Activo" : "Deshabilitado"}
                     </span>
-                    {u.lastLoginAt && <span>Last login {u.lastLoginAt}</span>}
+                    {u.lastLoginAt && <span>Último acceso {u.lastLoginAt}</span>}
                   </p>
                 </div>
                 <button type="button" className="btn-secondary" onClick={() => setEditing(editing === u.id ? null : u.id)}>
@@ -108,7 +108,7 @@ export function UsersManager({ users, currentUserId }: { users: UserRow[]; curre
                     className="btn-danger"
                     disabled={u.id === currentUserId}
                     onClick={(e) => {
-                      if (!confirm(`Delete ${u.name}? This cannot be undone.`)) e.preventDefault();
+                      if (!confirm(`¿Eliminar a ${u.name}? Esta acción no se puede deshacer.`)) e.preventDefault();
                     }}
                   >
                     Delete
@@ -132,7 +132,7 @@ function CreateUserForm() {
       {state.error && <p className="text-sm text-danger">{state.error}</p>}
       {state.success && <p className="text-sm text-success">{state.success}</p>}
       <button type="submit" className="btn-primary" disabled={pending}>
-        {pending ? "Creating…" : "Create user"}
+        {pending ? "Creando…" : "Crear usuario"}
       </button>
     </form>
   );
@@ -148,20 +148,20 @@ function EditUserForm({ user }: { user: UserRow }) {
       />
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="field-label">New password (optional)</span>
+          <span className="field-label">Nueva contraseña (opcional)</span>
           <input name="password" type="password" className="input" minLength={8} autoComplete="new-password" />
-          <p className="field-hint">Leave blank to keep the current password.</p>
+          <p className="field-hint">Déjala vacía para conservar la contraseña actual.</p>
           {fieldError(state.fieldErrors, "password")}
         </label>
         <label className="flex items-end gap-2 pb-2 text-sm">
           <input type="checkbox" name="enabled" defaultChecked={user.enabled} />
-          Account enabled
+          Cuenta habilitada
         </label>
       </div>
       {state.error && <p className="text-sm text-danger">{state.error}</p>}
       {state.success && <p className="text-sm text-success">{state.success}</p>}
       <button type="submit" className="btn-primary" disabled={pending}>
-        {pending ? "Saving…" : "Save changes"}
+        {pending ? "Guardando…" : "Guardar cambios"}
       </button>
     </form>
   );

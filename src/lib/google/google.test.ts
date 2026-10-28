@@ -3,6 +3,7 @@ import { decodeJwt, decodeProtectedHeader, importSPKI, jwtVerify } from "jose";
 import { describe, expect, it } from "vitest";
 import type { GoogleConfig } from "@/lib/config/env";
 import type { Card, Subscriber } from "@/lib/db/schema";
+import { DEFAULT_GOOGLE_CONFIG } from "@/lib/cards/google";
 import { createGoogleWalletApi, createSaveUrl, GoogleWalletError, WALLET_API } from "./client";
 import {
   buildGenericClass,
@@ -67,6 +68,9 @@ const card = {
   nameLabel: "",
   latestLabel: "LATEST",
   barcode: false,
+  googleConfig: DEFAULT_GOOGLE_CONFIG,
+  publicPageMode: "full",
+  askEmail: true,
   createdAt: new Date(0),
   updatedAt: new Date(1000),
 } as Card;
@@ -82,14 +86,15 @@ describe("google object mapping", () => {
   it("maps a card to a generic object", () => {
     const obj = buildGenericObject(google.issuerId, card, subscriber, "https://wc.test");
     expect(obj.classId).toBe(classId(google.issuerId, card));
-    expect(obj.textModulesData[0]).toEqual({ id: "latest", header: "Latest", body: "Welcome!" });
+    expect(obj.textModulesData[0]).toEqual({ id: "latest", header: "Último mensaje", body: "Welcome!" });
     expect(obj.logo.sourceUri.uri).toBe(`https://wc.test/api/cards/${card.id}/image/icon?v=1000`);
     expect(obj).not.toHaveProperty("wideLogo");
-    expect(obj.linksModuleData.uris).toHaveLength(1);
+    expect(obj.linksModuleData).toEqual({ uris: [] });
+    expect(obj.valueAddedModuleData).toHaveLength(1);
 
     const withLogo = buildGenericObject(google.issuerId, { ...card, logo: Buffer.from("x"), websiteUrl: null, description: "" }, subscriber, "https://wc.test");
     expect(withLogo).toHaveProperty("wideLogo");
-    expect(withLogo.linksModuleData.uris).toEqual([]);
+    expect(withLogo.valueAddedModuleData).toBeUndefined();
     expect(withLogo.textModulesData).toHaveLength(1);
   });
 
@@ -112,18 +117,20 @@ describe("google object mapping", () => {
     });
   });
 
-  it("adds a hero image, links and custom fields", () => {
+  it("adds a hero image, link icons and custom fields", () => {
     const patch = buildObjectPatch(
       {
         ...card,
         backgroundType: "linear",
-        links: [{ id: "l1", label: "Menu", url: "https://menu.example", icon: "bag", style: "primary" }],
+        links: [{ id: "l1", label: "Menu", url: "https://menu.example", icon: "bag", style: "primary", iconAssetId: null }],
         customFields: [{ id: "f1", label: "Phone", value: "555 0100", location: "back" }],
       },
       "https://wc.test",
     );
     expect(patch.heroImage!.sourceUri.uri).toBe(`https://wc.test/api/cards/${card.id}/image/hero?v=1000`);
-    expect(patch.linksModuleData.uris.map((u: { description: string }) => u.description)).toContain("Menu");
+    const modules = patch.valueAddedModuleData as unknown as { header: { defaultValue: { value: string } }; image: { sourceUri: { uri: string } } }[];
+    expect(modules.map((m) => m.header.defaultValue.value)).toContain("Menu");
+    expect(modules.find((m) => m.header.defaultValue.value === "Menu")!.image.sourceUri.uri).toContain(`/link-icon/link%3Al1`);
     expect(patch.textModulesData).toContainEqual({ id: "cf_f1", header: "Phone", body: "555 0100" });
   });
 
@@ -131,6 +138,92 @@ describe("google object mapping", () => {
     expect(buildObjectPatch({ ...card, barcode: true, barcodeType: "pdf417" }, "https://wc.test").barcode!.type).toBe("PDF_417");
     expect(buildObjectPatch({ ...card, barcode: true, barcodeType: "aztec" }, "https://wc.test").barcode!.type).toBe("AZTEC");
     expect(buildObjectPatch({ ...card, barcode: true, barcodeType: "code128", barcodeContent: "custom", barcodeValue: "HELLO" }, "https://wc.test").barcode).toEqual({ type: "CODE_128", value: "HELLO" });
+  });
+
+  it("supports text and hidden code modes", () => {
+    const text = buildObjectPatch(
+      { ...card, googleConfig: { ...DEFAULT_GOOGLE_CONFIG, code: { mode: "text", text: "MEMBER 123" } } },
+      "https://wc.test",
+    );
+    expect(text.barcode).toEqual({ alternateText: "MEMBER 123" });
+    const hidden = buildObjectPatch(
+      { ...card, barcode: true, googleConfig: { ...DEFAULT_GOOGLE_CONFIG, code: { mode: "hidden", text: "" } } },
+      "https://wc.test",
+    );
+    expect(hidden.barcode).toBeUndefined();
+  });
+
+  it("adds the pass type and a front button", () => {
+    const patch = buildObjectPatch(
+      {
+        ...card,
+        googleConfig: {
+          ...DEFAULT_GOOGLE_CONFIG,
+          type: "business",
+          button: { label: "Reservar", url: "https://book.example" },
+        },
+      },
+      "https://wc.test",
+    ) as unknown as {
+      genericType: string;
+      appLinkData: { displayText: { defaultValue: { value: string } }; webAppLinkInfo: { appTarget: { targetUri: { uri: string } } } };
+    };
+    expect(patch.genericType).toBe("GENERIC_OTHER");
+    expect(patch.appLinkData.displayText.defaultValue.value).toBe("Reservar");
+    expect(patch.appLinkData.webAppLinkInfo.appTarget.targetUri.uri).toBe("https://book.example");
+  });
+
+  it("adds extra text modules, value modules and an image module", () => {
+    const patch = buildObjectPatch(
+      {
+        ...card,
+        websiteUrl: null,
+        googleConfig: {
+          ...DEFAULT_GOOGLE_CONFIG,
+          textModules: [{ id: "t1", header: "Horario", body: "9 a 18" }],
+          valueModules: [{ id: "v1", header: "Reservar", body: "Cita online", url: "https://book.example", imageKind: "preset", icon: "calendar", assetId: null }],
+          imageModule: { assetId: "asset-1", description: "Nuestro local" },
+        },
+      },
+      "https://wc.test",
+    ) as unknown as {
+      textModulesData: { id: string }[];
+      valueAddedModuleData: { header: { defaultValue: { value: string } } }[];
+      imageModulesData: { mainImage: { sourceUri: { uri: string } } }[];
+    };
+    expect(patch.textModulesData.map((m) => m.id)).toContain("t_t1");
+    expect(patch.valueAddedModuleData.map((m) => m.header.defaultValue.value)).toContain("Reservar");
+    expect(patch.imageModulesData[0].mainImage.sourceUri.uri).toBe(`https://wc.test/api/cards/${card.id}/asset/asset-1`);
+  });
+
+  it("clears old link modules and caps value modules at ten", () => {
+    const manyLinks = Array.from({ length: 12 }, (_, index) => ({
+      id: `l${index}`,
+      label: `Link ${index}`,
+      url: `https://example.com/${index}`,
+      icon: "link" as const,
+      style: "secondary" as const,
+      iconAssetId: null,
+    }));
+    const patch = buildObjectPatch({ ...card, links: manyLinks }, "https://wc.test") as unknown as {
+      linksModuleData: { uris: unknown[] };
+      valueAddedModuleData: unknown[];
+    };
+    expect(patch.linksModuleData).toEqual({ uris: [] });
+    expect(patch.valueAddedModuleData).toHaveLength(10);
+  });
+
+  it("builds front rows from custom fields", () => {
+    const withFront = { ...card, customFields: [{ id: "f1", label: "Socio", value: "123", location: "front" as const }] };
+    const classObj = buildGenericClass(google.issuerId, withFront) as unknown as {
+      classTemplateInfo: { cardTemplateOverride: { cardRowTemplateInfos: unknown[] } };
+    };
+    expect(classObj.classTemplateInfo.cardTemplateOverride.cardRowTemplateInfos).toHaveLength(2);
+    const onlyFront = buildGenericClass(google.issuerId, {
+      ...withFront,
+      googleConfig: { ...DEFAULT_GOOGLE_CONFIG, showLatest: false },
+    }) as unknown as { classTemplateInfo: { cardTemplateOverride: { cardRowTemplateInfos: unknown[] } } };
+    expect(onlyFront.classTemplateInfo.cardTemplateOverride.cardRowTemplateInfos).toHaveLength(1);
   });
 });
 

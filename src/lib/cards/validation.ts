@@ -13,6 +13,15 @@ import {
   LinksSchema,
   optionalHex,
 } from "./design";
+import { DEFAULT_GOOGLE_CONFIG, GoogleConfigInputSchema } from "./google";
+import { AppleConfigInputSchema, DEFAULT_APPLE_CONFIG } from "./apple";
+
+const checkbox = (defaultValue: boolean) =>
+  z.preprocess((value) => {
+    if (value === "on" || value === "true") return true;
+    if (value === "off" || value === "false") return false;
+    return undefined;
+  }, z.boolean().default(defaultValue));
 
 export const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/;
 
@@ -23,13 +32,13 @@ const optionalUrl = z
   .pipe(z.url({ protocol: /^https?$/ }).nullable());
 
 export const CardInputSchema = z.object({
-  name: z.string().trim().min(1, "Name is required").max(60),
-  organizationName: z.string().trim().min(1, "Organization is required").max(60),
+  name: z.string().trim().min(1, "El nombre es obligatorio").max(60),
+  organizationName: z.string().trim().min(1, "La organización es obligatoria").max(60),
   slug: z
     .string()
     .trim()
     .toLowerCase()
-    .regex(SLUG_PATTERN, "Slug: lowercase letters, digits and dashes (max 48)"),
+    .regex(SLUG_PATTERN, "Enlace: minúsculas, números y guiones (máx. 48)"),
   description: z.string().trim().max(500).default(""),
   welcomeText: z.string().trim().max(200).default(""),
   websiteUrl: optionalUrl.default(null),
@@ -40,14 +49,14 @@ export const CardInputSchema = z.object({
   latestLabel: z
     .string()
     .trim()
-    .transform((v) => v || "LATEST")
-    .pipe(z.string().max(12, "Label: 12 characters max"))
-    .default("LATEST"),
+    .transform((v) => v || "ÚLTIMO")
+    .pipe(z.string().max(12, "Máximo 12 caracteres"))
+    .default("ÚLTIMO"),
   contactUrl: optionalUrl.default(null),
-  logoText: z.string().trim().max(20, "Logo text: 20 characters max").default(""),
-  headerLabel: z.string().trim().max(12, "Header label: 12 characters max").default(""),
-  headerValue: z.string().trim().max(20, "Header value: 20 characters max").default(""),
-  nameLabel: z.string().trim().max(24, "Label above the name: 24 characters max").default(""),
+  logoText: z.string().trim().max(20, "Máximo 20 caracteres").default(""),
+  headerLabel: z.string().trim().max(12, "Máximo 12 caracteres").default(""),
+  headerValue: z.string().trim().max(20, "Máximo 20 caracteres").default(""),
+  nameLabel: z.string().trim().max(24, "Máximo 24 caracteres").default(""),
   dayGlow: z.stringbool().default(false),
   backgroundType: z.enum(BACKGROUND_TYPES).default("solid"),
   bgColor2: optionalHex.default(null),
@@ -60,7 +69,7 @@ export const CardInputSchema = z.object({
   iconSource: z.enum(ICON_SOURCES).default("auto"),
   iconPreset: z.union([z.enum(ICON_PRESETS), z.literal("")]).default(""),
   iconShape: z.enum(ICON_SHAPES).default("rounded"),
-  monogramText: z.string().trim().max(2, "2 characters max").default(""),
+  monogramText: z.string().trim().max(2, "Máximo 2 caracteres").default(""),
   links: LinksSchema.default([]),
   customFields: CustomFieldsSchema.default([]),
   barcodeType: z.enum(BARCODE_TYPES).default("qr"),
@@ -71,26 +80,30 @@ export const CardInputSchema = z.object({
     .max(240)
     .transform((v) => (v === "" ? null : v))
     .default(null),
+  googleConfig: GoogleConfigInputSchema.default(DEFAULT_GOOGLE_CONFIG),
+  appleConfig: AppleConfigInputSchema.default(DEFAULT_APPLE_CONFIG),
+  publicPageMode: z.enum(["full", "minimal"]).default("full"),
+  askEmail: checkbox(true),
 }).superRefine((input, ctx) => {
   if ((input.backgroundType === "linear" || input.backgroundType === "radial") && !input.bgColor2) {
-    ctx.addIssue({ code: "custom", path: ["bgColor2"], message: "Choose a second color for the gradient" });
+    ctx.addIssue({ code: "custom", path: ["bgColor2"], message: "Elige un segundo color para el degradado" });
   }
   if (input.barcodeContent === "custom" && !input.barcodeValue) {
-    ctx.addIssue({ code: "custom", path: ["barcodeValue"], message: "Enter the text to encode" });
+    ctx.addIssue({ code: "custom", path: ["barcodeValue"], message: "Escribe el texto que se codificará" });
   }
   if (input.barcodeType === "code128" && input.barcodeValue && !/^[\x20-\x7E]*$/.test(input.barcodeValue)) {
-    ctx.addIssue({ code: "custom", path: ["barcodeValue"], message: "Code 128 supports plain ASCII text only" });
+    ctx.addIssue({ code: "custom", path: ["barcodeValue"], message: "Code 128 solo admite texto ASCII simple" });
   }
   if (input.customFields.filter((f) => f.location === "front").length > 4) {
-    ctx.addIssue({ code: "custom", path: ["customFields"], message: "Up to 4 fields on the front of the card" });
+    ctx.addIssue({ code: "custom", path: ["customFields"], message: "Máximo 4 campos al frente de la tarjeta" });
   }
 });
 
 export type CardInput = z.infer<typeof CardInputSchema>;
 
 export const MessageInputSchema = z.object({
-  title: z.string().trim().min(1, "Title is required").max(40),
-  body: z.string().trim().min(1, "Message is required").max(300),
+  title: z.string().trim().min(1, "El título es obligatorio").max(40),
+  body: z.string().trim().min(1, "El mensaje es obligatorio").max(300),
 });
 
 export type MessageInput = z.infer<typeof MessageInputSchema>;

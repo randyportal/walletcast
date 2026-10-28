@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "WalletCast", template: "%s · WalletCast" },
-  description: "Send lock-screen notifications through Apple & Google Wallet passes. No app required.",
+  title: { default: "Travel Portal Wallet Card", template: "%s · Travel Portal Wallet Card" },
+  description: "Envía notificaciones a la pantalla de bloqueo mediante pases de Apple Wallet y Google Wallet. Sin app.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="es" className="h-full antialiased">
       <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );

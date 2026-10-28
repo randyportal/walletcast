@@ -12,15 +12,18 @@ import { faviconIcons } from "@/lib/cards/favicon";
 import { LINK_ICON_PATHS } from "@/lib/cards/icon-paths";
 import { glowSlot, slotHue } from "@/lib/glow/hue";
 import { PassPreview } from "@/components/PassPreview";
+import { GooglePreview } from "@/components/GooglePreview";
 import { Glyph } from "@/components/icons";
+import { normalizeGoogleConfig } from "@/lib/cards/google";
+import { normalizeAppleConfig } from "@/lib/cards/apple";
 
 export async function generateMetadata({ params }: PageProps<"/c/[slug]">): Promise<Metadata> {
   const { slug } = await params;
   const { cards } = await getServices();
   const card = await cards.findBySlug(slug);
   return card
-    ? { title: { absolute: card.name }, description: `Add ${card.name} to your wallet.`, icons: faviconIcons(card) }
-    : { title: "Card not found" };
+    ? { title: { absolute: card.name }, description: `Agrega ${card.name} a tu cartera.`, icons: faviconIcons(card) }
+    : { title: "Tarjeta no encontrada" };
 }
 
 function accentText(hex: string): string {
@@ -39,9 +42,10 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
   const isApple = /ios|mac/i.test(os);
   const source = normaliseSource(typeof src === "string" ? src : null);
   const buttons = [
-    config.apple && !isAndroid && { key: "apple", label: "Add to Apple Wallet", action: `/api/passes/apple/${card.slug}` },
-    config.google && !isApple && { key: "google", label: "Add to Google Wallet", action: `/api/passes/google/${card.slug}` },
+    config.apple && !isAndroid && { key: "apple", label: "Agregar a Apple Wallet", action: `/api/passes/apple/${card.slug}` },
+    config.google && !isApple && { key: "google", label: "Agregar a Google Wallet", action: `/api/passes/google/${card.slug}` },
   ].filter((b): b is { key: string; label: string; action: string } => Boolean(b));
+  const minimal = card.publicPageMode === "minimal";
 
   const style = cardBackgroundStyle({
     backgroundType: card.backgroundType,
@@ -53,6 +57,107 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
     backgroundPosition: card.backgroundPosition,
     backgroundImageUrl: card.backgroundImage ? `/api/cards/${card.id}/image/background?v=${card.updatedAt.getTime()}` : null,
   });
+
+  const backgroundUrl = card.backgroundImage ? `/api/cards/${card.id}/image/background?v=${card.updatedAt.getTime()}` : null;
+  const preview = isAndroid && config.google ? (
+    <GooglePreview
+      organizationName={card.organizationName}
+      name={card.name}
+      description={card.description}
+      message={latestMessageText(card)}
+      websiteUrl={card.websiteUrl ?? undefined}
+      contactUrl={card.contactUrl ?? undefined}
+      bgColor={card.bgColor}
+      fgColor={card.fgColor}
+      labelColor={card.labelColor}
+      accentColor={card.accentColor}
+      backgroundType={card.backgroundType}
+      bgColor2={card.bgColor2}
+      gradientAngle={card.gradientAngle}
+      backgroundOverlay={card.backgroundOverlay}
+      backgroundOverlayColor={card.backgroundOverlayColor}
+      backgroundPosition={card.backgroundPosition}
+      backgroundImageUrl={backgroundUrl}
+      fontFamily={card.fontFamily}
+      logoUrl={card.logo ? imageUrl("", card, "logo") : null}
+      iconUrl={imageUrl("", card, "icon")}
+      barcode={card.barcode}
+      qrUrl={`/api/cards/${card.id}/qr?src=pass`}
+      glowHue={card.dayGlow ? slotHue(glowSlot(new Date(), config.glowTimeZone)) : null}
+      googleConfig={normalizeGoogleConfig(card.googleConfig)}
+      links={minimal ? [] : card.links}
+      customFields={card.customFields}
+      cardId={card.id}
+    />
+  ) : (
+    <PassPreview
+      organizationName={card.organizationName}
+      name={card.name}
+      description={card.description}
+      message={latestMessageText(card)}
+      websiteUrl={card.websiteUrl ?? undefined}
+      contactUrl={card.contactUrl ?? undefined}
+      bgColor={card.bgColor}
+      fgColor={card.fgColor}
+      labelColor={card.labelColor}
+      accentColor={card.accentColor}
+      backgroundType={card.backgroundType}
+      bgColor2={card.bgColor2}
+      gradientAngle={card.gradientAngle}
+      backgroundOverlay={card.backgroundOverlay}
+      backgroundOverlayColor={card.backgroundOverlayColor}
+      backgroundPosition={card.backgroundPosition}
+      backgroundImageUrl={backgroundUrl}
+      fontFamily={card.fontFamily}
+      logoUrl={card.logo ? imageUrl("", card, "logo") : null}
+      iconUrl={imageUrl("", card, "icon")}
+      latestLabel={card.latestLabel}
+      logoText={card.logoText}
+      headerLabel={card.headerLabel}
+      headerValue={card.headerValue}
+      nameLabel={card.nameLabel}
+      barcode={card.barcode}
+      barcodeType={card.barcodeType}
+      customFields={card.customFields}
+      links={minimal ? [] : card.links}
+      qrUrl={`/api/cards/${card.id}/qr?src=pass`}
+      glowHue={card.dayGlow ? slotHue(glowSlot(new Date(), config.glowTimeZone)) : null}
+      appleConfig={normalizeAppleConfig(card.appleConfig)}
+      appleImageUrl={card.appleImage ? `/api/cards/${card.id}/image/apple-image?v=${card.updatedAt.getTime()}` : null}
+    />
+  );
+
+  const addButtons = buttons.length > 0 && (
+    <form method="post" className="space-y-3">
+      {source && <input type="hidden" name="src" value={source} />}
+      {card.askEmail && !minimal && (
+        <label className="block">
+          <span className="text-sm font-medium" style={{ color: card.fgColor }}>Correo (opcional)</span>
+          <input name="email" type="email" className="input" placeholder="you@example.com" autoComplete="email" />
+        </label>
+      )}
+      {buttons.map((b, i) => (
+        <button
+          key={b.key}
+          formAction={b.action}
+          className="w-full rounded-lg px-4 py-3 text-base"
+          style={
+            i === 0
+              ? { background: card.accentColor, color: accentText(card.accentColor) }
+              : { border: "1px solid currentColor", color: card.accentColor }
+          }
+        >
+          {b.label}
+        </button>
+      ))}
+      {error && <p className="text-center text-sm text-danger">{error === "429" ? "Demasiados intentos. Inténtalo de nuevo en un minuto." : error === "400" ? "Ese correo no parece válido." : "Algo salió mal. Inténtalo de nuevo."}</p>}
+      {!minimal && card.contactUrl && (
+        <a href={card.contactUrl} className="block text-center text-sm underline">
+          Guardar contacto
+        </a>
+      )}
+    </form>
+  );
 
   return (
     <main
@@ -67,120 +172,75 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
       }}
     >
       <div className="w-full max-w-sm space-y-6">
-        <PassPreview
-          organizationName={card.organizationName}
-          name={card.name}
-          message={latestMessageText(card)}
-          bgColor={card.bgColor}
-          fgColor={card.fgColor}
-          labelColor={card.labelColor}
-          accentColor={card.accentColor}
-          backgroundType={card.backgroundType}
-          bgColor2={card.bgColor2}
-          gradientAngle={card.gradientAngle}
-          backgroundOverlay={card.backgroundOverlay}
-          backgroundOverlayColor={card.backgroundOverlayColor}
-          backgroundPosition={card.backgroundPosition}
-          backgroundImageUrl={card.backgroundImage ? `/api/cards/${card.id}/image/background?v=${card.updatedAt.getTime()}` : null}
-          fontFamily={card.fontFamily}
-          logoUrl={card.logo ? imageUrl("", card, "logo") : null}
-          iconUrl={imageUrl("", card, "icon")}
-          latestLabel={card.latestLabel}
-          logoText={card.logoText}
-          headerLabel={card.headerLabel}
-          headerValue={card.headerValue}
-          nameLabel={card.nameLabel}
-          barcode={card.barcode}
-          barcodeType={card.barcodeType}
-          customFields={card.customFields}
-          links={card.links}
-          qrUrl={`/api/cards/${card.id}/qr?src=pass`}
-          glowHue={card.dayGlow ? slotHue(glowSlot(new Date(), config.glowTimeZone)) : null}
-        />
+        {preview}
 
-        <div className="space-y-2 text-center">
-          <h1 className="text-xl font-semibold">Add {card.name} to your wallet</h1>
-          {card.description && <p className="text-sm" style={{ color: card.labelColor }}>{card.description}</p>}
-          <p className="text-xs" style={{ color: card.labelColor }}>No app, no account. Remove the card anytime to stop.</p>
-        </div>
-
-        {buttons.length === 0 ? (
-          <div className="space-y-3">
-            {card.contactUrl && (
-              <a href={card.contactUrl} className="block w-full rounded-lg px-4 py-3 text-center text-base" style={{ background: card.accentColor, color: accentText(card.accentColor) }}>
-                Save contact
-              </a>
-            )}
-            {card.websiteUrl && (
-              <a href={card.websiteUrl} className="block w-full rounded-lg border border-current px-4 py-3 text-center text-base" style={{ color: card.accentColor }}>
-                Website
-              </a>
-            )}
-            {!card.contactUrl && !card.websiteUrl && card.links.length === 0 && (
-              <p className="panel text-center text-sm" style={{ color: card.labelColor }}>This card is not available yet.</p>
-            )}
-          </div>
+        {minimal ? (
+          addButtons || (
+            <p className="panel text-center text-sm" style={{ color: card.labelColor }}>
+              Esta tarjeta aún no está disponible.
+            </p>
+          )
         ) : (
-          <form method="post" className="space-y-3">
-            {source && <input type="hidden" name="src" value={source} />}
-            <label className="block">
-              <span className="text-sm font-medium" style={{ color: card.fgColor }}>Email (optional)</span>
-              <input name="email" type="email" className="input" placeholder="you@example.com" autoComplete="email" />
-            </label>
-            {buttons.map((b, i) => (
-              <button
-                key={b.key}
-                formAction={b.action}
-                className="w-full rounded-lg px-4 py-3 text-base"
-                style={
-                  i === 0
-                    ? { background: card.accentColor, color: accentText(card.accentColor) }
-                    : { border: "1px solid currentColor", color: card.accentColor }
-                }
-              >
-                {b.label}
-              </button>
-            ))}
-            {error && <p className="text-center text-sm text-danger">{error === "429" ? "Too many attempts, try again in a minute." : error === "400" ? "That email address looks invalid." : "Something went wrong. Please try again."}</p>}
-            {card.contactUrl && (
-              <a href={card.contactUrl} className="block text-center text-sm underline">
-                Save contact
-              </a>
-            )}
-          </form>
-        )}
+          <>
+            <div className="space-y-2 text-center">
+              <h1 className="text-xl font-semibold">Agrega {card.name} a tu cartera</h1>
+              {card.description && <p className="text-sm" style={{ color: card.labelColor }}>{card.description}</p>}
+              <p className="text-xs" style={{ color: card.labelColor }}>Sin app ni cuenta. Elimina la tarjeta cuando quieras para dejar de recibir avisos.</p>
+            </div>
 
-        {card.links.length > 0 && (
-          <div className="space-y-2">
-            {card.links.map((link) => (
-              <a
-                key={link.id}
-                href={link.url}
-                className="flex items-center gap-3 rounded-lg px-4 py-3 text-base"
-                style={
-                  link.style === "primary"
-                    ? { background: card.accentColor, color: accentText(card.accentColor) }
-                    : link.style === "outline"
-                      ? { border: "1px solid currentColor", color: card.accentColor }
-                      : { border: "1px solid currentColor", color: card.fgColor }
-                }
-              >
-                <Glyph path={LINK_ICON_PATHS[link.icon]} size={18} />
-                <span>{link.label}</span>
-              </a>
-            ))}
-          </div>
-        )}
-
-        {card.customFields.length > 0 && (
-          <div className="space-y-2 rounded-xl border border-white/10 p-4" style={{ background: "rgba(0,0,0,0.12)" }}>
-            {card.customFields.map((f) => (
-              <div key={f.id} className="flex justify-between gap-4 text-sm">
-                <span style={{ color: card.labelColor }}>{f.label}</span>
-                <span className="text-right font-medium">{f.value}</span>
+            {buttons.length === 0 ? (
+              <div className="space-y-3">
+                {card.contactUrl && (
+                  <a href={card.contactUrl} className="block w-full rounded-lg px-4 py-3 text-center text-base" style={{ background: card.accentColor, color: accentText(card.accentColor) }}>
+                    Guardar contacto
+                  </a>
+                )}
+                {card.websiteUrl && (
+                  <a href={card.websiteUrl} className="block w-full rounded-lg border border-current px-4 py-3 text-center text-base" style={{ color: card.accentColor }}>
+                    Website
+                  </a>
+                )}
+                {!card.contactUrl && !card.websiteUrl && card.links.length === 0 && (
+                  <p className="panel text-center text-sm" style={{ color: card.labelColor }}>Esta tarjeta aún no está disponible.</p>
+                )}
               </div>
-            ))}
-          </div>
+            ) : (
+              addButtons
+            )}
+
+            {card.links.length > 0 && (
+              <div className="space-y-2">
+                {card.links.map((link) => (
+                  <a
+                    key={link.id}
+                    href={link.url}
+                    className="flex items-center gap-3 rounded-lg px-4 py-3 text-base"
+                    style={
+                      link.style === "primary"
+                        ? { background: card.accentColor, color: accentText(card.accentColor) }
+                        : link.style === "outline"
+                          ? { border: "1px solid currentColor", color: card.accentColor }
+                          : { border: "1px solid currentColor", color: card.fgColor }
+                    }
+                  >
+                    <Glyph path={LINK_ICON_PATHS[link.icon]} size={18} />
+                    <span>{link.label}</span>
+                  </a>
+                ))}
+              </div>
+            )}
+
+            {card.customFields.length > 0 && (
+              <div className="space-y-2 rounded-xl border border-white/10 p-4" style={{ background: "rgba(0,0,0,0.12)" }}>
+                {card.customFields.map((f) => (
+                  <div key={f.id} className="flex justify-between gap-4 text-sm">
+                    <span style={{ color: card.labelColor }}>{f.label}</span>
+                    <span className="text-right font-medium">{f.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </main>

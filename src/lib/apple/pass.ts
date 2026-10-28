@@ -1,17 +1,18 @@
 import { PKPass } from "passkit-generator";
 import type { AppleConfig } from "@/lib/config/env";
 import type { Card, Subscriber } from "@/lib/db/schema";
-import { LOGO_MASTER, renderCardIcon, renderCardStrips, resizePng } from "@/lib/cards/images";
+import { LOGO_MASTER, renderCardIcon, renderCardStrips, renderImageStrips, resizePng } from "@/lib/cards/images";
 import { cardUsesHero } from "@/lib/cards/design";
 import { APPLE_BARCODE_FORMATS, resolveBarcode } from "@/lib/cards/barcode";
 import { glowSlot, slotHue } from "@/lib/glow/hue";
+import { normalizeAppleConfig } from "@/lib/cards/apple";
 
 export const APPLE_WEB_SERVICE_PATH = "/api/apple";
 export const LATEST_FIELD_KEY = "latest";
 
 /** Text shown on the pass (and in the notification) for the latest broadcast. */
 export function latestMessageText(card: Pick<Card, "latestMessage" | "welcomeText">): string {
-  return card.latestMessage || card.welcomeText || "You will receive updates here.";
+  return card.latestMessage || card.welcomeText || "Aquí recibirás novedades.";
 }
 
 function hexToRgb(hex: string): string {
@@ -54,7 +55,8 @@ export async function buildApplePass({
   timeZone = "Europe/Rome",
   now = new Date(),
 }: BuildApplePassArgs): Promise<Buffer> {
-  const hero = cardUsesHero(card);
+  const appleConfig = normalizeAppleConfig(card.appleConfig);
+  const hero = cardUsesHero(card) || Boolean(card.appleImage);
   const style = hero ? "storeCard" : "generic";
   const barcode = resolveBarcode(card, baseUrl);
   const passJson = {
@@ -79,13 +81,18 @@ export async function buildApplePass({
               format: APPLE_BARCODE_FORMATS[barcode.format],
               message: barcode.value,
               messageEncoding: "iso-8859-1",
+              ...(appleConfig.codeText ? { altText: appleConfig.codeText } : {}),
             },
           ],
         }
       : {}),
   };
   const hue = slotHue(glowSlot(now, timeZone));
-  const strips = hero ? await renderCardStrips(card, hue) : {};
+  const strips = card.appleImage
+    ? await renderImageStrips(card.appleImage)
+    : hero
+      ? await renderCardStrips(card, hue)
+      : {};
 
   const pass = new PKPass(
     { "pass.json": Buffer.from(JSON.stringify(passJson)), ...(await imageBuffers(card)), ...strips },
@@ -107,19 +114,27 @@ export async function buildApplePass({
     value: latestMessageText(card),
     changeMessage: "%@",
   });
-  for (const field of card.customFields.filter((f) => f.location === "front").slice(0, 4)) {
-    pass.auxiliaryFields.push({ key: `cf_${field.id}`, label: field.label.toUpperCase(), value: field.value });
+  if (appleConfig.showCustomFields) {
+    for (const field of card.customFields.filter((f) => f.location === "front").slice(0, 4)) {
+      pass.auxiliaryFields.push({ key: `cf_${field.id}`, label: field.label.toUpperCase(), value: field.value });
+    }
   }
 
   const back = [
-    { key: "latest_back", label: "Latest message", value: latestMessageText(card) },
-    card.description && { key: "about", label: "About", value: card.description },
-    card.websiteUrl && { key: "website", label: "Website", value: card.websiteUrl },
-    card.contactUrl && { key: "contact", label: "Save contact", value: card.contactUrl },
+    { key: "latest_back", label: "Último mensaje", value: latestMessageText(card) },
+    appleConfig.showDescription && card.description && { key: "about", label: "Acerca de", value: card.description },
+    card.websiteUrl && { key: "website", label: "Sitio web", value: card.websiteUrl },
+    card.contactUrl && { key: "contact", label: "Guardar contacto", value: card.contactUrl },
     ...card.links.map((link) => ({ key: `link_${link.id}`, label: link.label, value: link.url })),
-    ...card.customFields
-      .filter((f) => f.location === "back")
-      .map((field) => ({ key: `cf_${field.id}`, label: field.label, value: field.value })),
+    ...(appleConfig.showCustomFields
+      ? card.customFields
+          .filter((f) => f.location === "back")
+          .map((field) => ({ key: `cf_${field.id}`, label: field.label, value: field.value }))
+      : []),
+    ...(appleConfig.button
+      ? [{ key: "button", label: appleConfig.button.label, value: appleConfig.button.url }]
+      : []),
+    ...appleConfig.textModules.map((textModule) => ({ key: `tm_${textModule.id}`, label: textModule.header, value: textModule.body })),
   ].filter(Boolean) as { key: string; label: string; value: string }[];
   pass.backFields.push(...back);
 

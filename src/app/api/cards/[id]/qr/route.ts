@@ -10,7 +10,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/cards/[i
   const { id } = await ctx.params;
   const { config, cards } = await getServices();
   const card = await cards.findById(id);
-  if (!card) return new Response("Not found", { status: 404 });
+  if (!card) return new Response("No encontrado", { status: 404 });
 
   const params = request.nextUrl.searchParams;
   const url = publicCardUrl(config.baseUrl, card.slug, normaliseSource(params.get("src")));

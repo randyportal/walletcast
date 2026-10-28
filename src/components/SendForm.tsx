@@ -26,7 +26,7 @@ export function SendForm({ action, subscriberCount }: Props) {
       <input
         name="title"
         className="input"
-        placeholder="Title (e.g. Flash sale)"
+        placeholder="Título (por ejemplo, Oferta flash)"
         maxLength={40}
         required
         value={title}
@@ -35,7 +35,7 @@ export function SendForm({ action, subscriberCount }: Props) {
       <textarea
         name="body"
         className="input min-h-24"
-        placeholder="Your message. It appears on the lock screen."
+        placeholder="Tu mensaje. Aparecerá en la pantalla de bloqueo."
         maxLength={300}
         required
         value={body}
@@ -48,10 +48,10 @@ export function SendForm({ action, subscriberCount }: Props) {
           className="btn-primary"
           disabled={pending || subscriberCount === 0}
           onClick={(e) => {
-            if (!confirm(`Send this notification to ${subscriberCount} wallet(s)?`)) e.preventDefault();
+            if (!confirm(`¿Enviar esta notificación a ${subscriberCount} cartera(s)?`)) e.preventDefault();
           }}
         >
-          {pending ? "Sending…" : `Send to ${subscriberCount}`}
+          {pending ? "Enviando…" : `Enviar a ${subscriberCount}`}
         </button>
       </div>
       {state.error && <p className="text-sm text-danger">{state.error}</p>}

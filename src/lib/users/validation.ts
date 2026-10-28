@@ -13,19 +13,19 @@ const username = z
   .string()
   .trim()
   .toLowerCase()
-  .regex(USERNAME_PATTERN, "Username: 3-32 lowercase letters, digits, dots, dashes, underscores");
+  .regex(USERNAME_PATTERN, "Usuario: 3-32 caracteres en minúsculas, números, puntos, guiones o guiones bajos");
 
 export const UserCreateSchema = z.object({
   username,
-  name: z.string().trim().min(1, "Name is required").max(60),
+  name: z.string().trim().min(1, "El nombre es obligatorio").max(60),
   email: optionalEmail.default(null),
   role: z.enum(["admin", "marketing"]).default("marketing"),
-  password: z.string().min(8, "At least 8 characters").max(200),
+  password: z.string().min(8, "Mínimo 8 caracteres").max(200),
 });
 
 export const UserUpdateSchema = z.object({
   username,
-  name: z.string().trim().min(1, "Name is required").max(60),
+  name: z.string().trim().min(1, "El nombre es obligatorio").max(60),
   email: optionalEmail.default(null),
   role: z.enum(["admin", "marketing"]),
   enabled: z.stringbool().default(true),
@@ -33,7 +33,7 @@ export const UserUpdateSchema = z.object({
     .string()
     .trim()
     .transform((v) => (v === "" ? null : v))
-    .pipe(z.string().min(8, "At least 8 characters").max(200).nullable())
+    .pipe(z.string().min(8, "Mínimo 8 caracteres").max(200).nullable())
     .default(null),
 });
 

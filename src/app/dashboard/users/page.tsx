@@ -3,7 +3,7 @@ import { getServices } from "@/lib/services";
 import { requireAdmin } from "@/server/auth";
 import { UsersManager } from "@/components/UsersManager";
 
-export const metadata: Metadata = { title: "Users" };
+export const metadata: Metadata = { title: "Usuarios" };
 
 export default async function UsersPage({ searchParams }: PageProps<"/dashboard/users">) {
   const current = await requireAdmin();
@@ -18,21 +18,21 @@ export default async function UsersPage({ searchParams }: PageProps<"/dashboard/
     email: u.email,
     role: u.role,
     enabled: u.enabled,
-    lastLoginAt: u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : null,
+    lastLoginAt: u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString("es") : null,
   }));
 
   return (
     <>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Users</h1>
+          <h1 className="text-2xl font-semibold">Usuarios</h1>
           <p className="text-sm text-muted">
-            Admins can do everything. Marketing users can only send notifications.
+            Los administradores pueden hacer todo. Los usuarios de marketing solo pueden enviar notificaciones.
           </p>
         </div>
       </div>
-      {error === "self" && <p className="mb-4 text-sm text-danger">You cannot delete your own account.</p>}
-      {error === "lastadmin" && <p className="mb-4 text-sm text-danger">You cannot remove the last active admin.</p>}
+      {error === "self" && <p className="mb-4 text-sm text-danger">No puedes eliminar tu propia cuenta.</p>}
+      {error === "lastadmin" && <p className="mb-4 text-sm text-danger">No puedes quitar al último administrador activo.</p>}
       <UsersManager users={rows} currentUserId={current.id} />
     </>
   );

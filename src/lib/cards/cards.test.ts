@@ -114,8 +114,8 @@ describe("images", () => {
     expect(await processLogoUpload(null)).toBeUndefined();
     expect(await processIconUpload(new File([], "x.png", { type: "image/png" }))).toBeUndefined();
     await expect(processLogoUpload(new File(["x"], "x.gif", { type: "image/gif" }))).rejects.toBeInstanceOf(ImageUploadError);
-    await expect(processIconUpload(new File(["nope"], "x.png", { type: "image/png" }))).rejects.toThrow(/could not be read/);
-    await expect(processLogoUpload(new File(["nope"], "x.png", { type: "image/png" }))).rejects.toThrow(/could not be read/);
+    await expect(processIconUpload(new File(["nope"], "x.png", { type: "image/png" }))).rejects.toThrow(/No se pudo leer esta imagen/);
+    await expect(processLogoUpload(new File(["nope"], "x.png", { type: "image/png" }))).rejects.toThrow(/No se pudo leer esta imagen/);
     const big = new File([new Uint8Array(3 * 1024 * 1024)], "big.png", { type: "image/png" });
     await expect(processLogoUpload(big)).rejects.toThrow(/2 MB/);
   });
@@ -128,8 +128,8 @@ describe("images", () => {
 
 describe("business-card options", () => {
   it("defaults every option off", () => {
-    expect(input()).toMatchObject({ barcode: false, dayGlow: false, latestLabel: "LATEST", contactUrl: null });
-    expect(input({ latestLabel: "  " }).latestLabel).toBe("LATEST");
+    expect(input()).toMatchObject({ barcode: false, dayGlow: false, latestLabel: "ÚLTIMO", contactUrl: null });
+    expect(input({ latestLabel: "  " }).latestLabel).toBe("ÚLTIMO");
   });
 
   it("parses checkbox values and trims the label", () => {
@@ -139,7 +139,7 @@ describe("business-card options", () => {
 
   it("keeps logo text and header field optional", () => {
     expect(input()).toMatchObject({ logoText: "", headerLabel: "", headerValue: "", nameLabel: "" });
-    expect(() => input({ headerValue: "x".repeat(25) })).toThrow(/20 characters/);
+    expect(() => input({ headerValue: "x".repeat(25) })).toThrow(/Máximo 20 caracteres/);
   });
 
   it("rejects long labels and non-http contact links", () => {

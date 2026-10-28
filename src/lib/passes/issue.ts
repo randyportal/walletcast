@@ -29,7 +29,7 @@ export type IssueRequest = z.infer<typeof IssueRequestSchema>;
 
 export class PlatformDisabledError extends Error {
   constructor(platform: string) {
-    super(`${platform} is not configured on this WalletCast server`);
+    super(`${platform} no está configurado en este servidor`);
     this.name = "PlatformDisabledError";
   }
 }

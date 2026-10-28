@@ -29,7 +29,7 @@ export interface BroadcastResult {
 
 export class CardNotFoundError extends Error {
   constructor() {
-    super("Card not found");
+    super("Tarjeta no encontrada");
     this.name = "CardNotFoundError";
   }
 }

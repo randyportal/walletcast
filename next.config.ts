@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   experimental: {
     serverActions: {
-      bodySizeLimit: "12mb",
+      bodySizeLimit: "24mb",
     },
   },
   // Dev only: let an HTTPS tunnel (needed to test Apple Wallet on a real iPhone) load dev assets.

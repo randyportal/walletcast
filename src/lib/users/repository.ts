@@ -7,14 +7,14 @@ export type PublicUser = Omit<User, "passwordHash">;
 
 export class UsernameTakenError extends Error {
   constructor() {
-    super("This username is already taken");
+    super("Este usuario ya está ocupado");
     this.name = "UsernameTakenError";
   }
 }
 
 export class EmailTakenError extends Error {
   constructor() {
-    super("This email is already used by another user");
+    super("Este correo ya lo usa otro usuario");
     this.name = "EmailTakenError";
   }
 }
