@@ -96,7 +96,7 @@ export async function processLinkIconUpload(file: File | null): Promise<Buffer |
   if (!file || file.size === 0) return undefined;
   const input = await readUpload(file, MAX_LINK_ICON_BYTES);
   try {
-    return await sharp(input, SHARP_OPTIONS).resize({ ...LINK_ICON_MASTER, fit: "cover" }).png().toBuffer();
+    return await sharp(input, SHARP_OPTIONS).resize({ ...LINK_ICON_MASTER, fit: "inside", withoutEnlargement: true }).png().toBuffer();
   } catch {
     throw new ImageUploadError("No se pudo leer esta imagen");
   }
@@ -203,10 +203,26 @@ export async function renderLinkIcon(
 ): Promise<Buffer> {
   const path = LINK_ICON_PATHS[icon] ?? LINK_ICON_PATHS.link;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${LINK_ICON_MASTER.width}" height="${LINK_ICON_MASTER.height}">
-    <circle cx="${LINK_ICON_MASTER.width / 2}" cy="${LINK_ICON_MASTER.height / 2}" r="${LINK_ICON_MASTER.width / 2}" fill="${bgColor}"/>
+    <rect width="${LINK_ICON_MASTER.width}" height="${LINK_ICON_MASTER.height}" fill="${bgColor}"/>
     <g transform="translate(64 64) scale(5.3333333)" fill="none" stroke="${fgColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</g>
   </svg>`;
-  return sharp(Buffer.from(svg), SHARP_OPTIONS).resize(size, size).png().toBuffer();
+  return sharp(Buffer.from(svg), SHARP_OPTIONS)
+    .resize(size, size)
+    .flatten({ background: bgColor })
+    .png()
+    .toBuffer();
+}
+
+/** Flattens an uploaded PNG/WebP onto an opaque tile so Google never paints white around it. */
+export async function renderCustomLinkIcon(input: Buffer, bgColor: string, size = LINK_ICON_MASTER.width): Promise<Buffer> {
+  const padding = Math.max(8, Math.round(size * 0.14));
+  const inner = Math.max(1, size - padding * 2);
+  return sharp(input, SHARP_OPTIONS)
+    .resize({ width: inner, height: inner, fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .extend({ top: padding, bottom: padding, left: padding, right: padding, background: bgColor })
+    .flatten({ background: bgColor })
+    .png()
+    .toBuffer();
 }
 
 export async function resizePng(input: Buffer, width: number, height: number, fit: "inside" | "cover"): Promise<Buffer> {

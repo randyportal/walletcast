@@ -74,6 +74,7 @@ function nameBlock(props: PassPreviewProps) {
 export function PassPreview(props: PassPreviewProps) {
   const apple = normalizeAppleConfig(props.appleConfig);
   const content = props.contentConfig ?? DEFAULT_CONTENT_CONFIG;
+  const iconBackground = content.recommendations.iconBackground || props.accentColor;
   const hero = cardUsesHero({ dayGlow: props.glowHue != null, backgroundType: props.backgroundType });
   const heroStyle = cardBackgroundStyle(props);
   const font = fontStack(props.fontFamily);
@@ -213,12 +214,16 @@ export function PassPreview(props: PassPreviewProps) {
                     : { background: "rgba(127,127,127,0.15)" }
               }
             >
-              {link.iconAssetId ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={`/api/cards/${props.cardId}/asset/${link.iconAssetId}`} alt="" className="h-4 w-4 rounded-full object-cover" />
-              ) : (
-                <Glyph path={LINK_ICON_PATHS[link.icon]} size={16} />
-              )}
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-md" style={{ background: iconBackground }}>
+                {link.iconAssetId && props.cardId ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={`/api/cards/${props.cardId}/asset/${link.iconAssetId}`} alt="" className="h-full w-full object-contain p-1" />
+                ) : (
+                  <span style={{ color: accentText(iconBackground) }}>
+                    <Glyph path={LINK_ICON_PATHS[link.icon]} size={15} />
+                  </span>
+                )}
+              </span>
               <span className="min-w-0">
                 <span className="block truncate">{link.label}</span>
                 {link.subtitle && <span className="block truncate text-xs opacity-70">{link.subtitle}</span>}

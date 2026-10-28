@@ -25,7 +25,7 @@ export default async function UsersPage({ searchParams }: PageProps<"/dashboard/
     <>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Usuarios</h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Equipo</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Usuarios</h1>
           <p className="text-sm text-muted">
             Los administradores pueden hacer todo. Los usuarios de marketing solo pueden enviar notificaciones.
           </p>

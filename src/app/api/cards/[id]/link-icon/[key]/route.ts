@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { getServices } from "@/lib/services";
-import { renderLinkIcon } from "@/lib/cards/images";
+import { renderCustomLinkIcon, renderLinkIcon } from "@/lib/cards/images";
 import { contrastRatio, type LinkIcon } from "@/lib/cards/design";
 import { normalizeGoogleConfig } from "@/lib/cards/google";
 import { normalizeContent } from "@/lib/cards/content";
@@ -11,6 +11,8 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/cards/[
   const { cards, assets } = await getServices();
   const card = await cards.findById(id);
   if (!card) return new Response("No encontrado", { status: 404 });
+  const content = normalizeContent(card);
+  const iconBackground = content.config.recommendations.iconBackground || card.accentColor;
 
   let icon: LinkIcon = "link";
   let assetId: string | null = null;
@@ -35,15 +37,15 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/cards/[
   if (assetId) {
     const asset = await assets.findById(assetId);
     if (asset && asset.cardId === card.id) {
-      return new Response(new Uint8Array(asset.data), {
-        headers: { "content-type": asset.mime, "cache-control": "public, max-age=86400, immutable" },
+      const png = await renderCustomLinkIcon(asset.data, iconBackground);
+      return new Response(new Uint8Array(png), {
+        headers: { "content-type": "image/png", "cache-control": "public, max-age=86400, immutable" },
       });
     }
   }
 
-  const bg = card.accentColor;
-  const fg = contrastRatio(bg, "#000000") >= contrastRatio(bg, "#ffffff") ? "#000000" : "#ffffff";
-  const png = await renderLinkIcon(icon, bg, fg);
+  const fg = contrastRatio(iconBackground, "#000000") >= contrastRatio(iconBackground, "#ffffff") ? "#000000" : "#ffffff";
+  const png = await renderLinkIcon(icon, iconBackground, fg);
   return new Response(new Uint8Array(png), {
     headers: { "content-type": "image/png", "cache-control": "public, max-age=86400, immutable" },
   });

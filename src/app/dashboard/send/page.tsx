@@ -13,7 +13,7 @@ export default async function SendPage() {
     <>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Enviar una notificación</h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Campañas</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Enviar una notificación</h1>
           <p className="text-sm text-muted">Elige una tarjeta y escribe un mensaje. Llega a todas las carteras al instante.</p>
         </div>
         {user.role === "admin" && (
@@ -33,7 +33,7 @@ export default async function SendPage() {
             <Link
               key={card.id}
               href={`/dashboard/send/${card.id}`}
-              className="panel block transition hover:border-accent"
+              className="panel block transition hover:border-accent hover:shadow-[var(--shadow-md)]"
             >
               <div className="mb-4 h-2 rounded-full" style={{ background: card.bgColor }} />
               <p className="text-sm text-muted">{card.organizationName}</p>

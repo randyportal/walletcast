@@ -152,7 +152,7 @@ function recommendationModules(card: Card, baseUrl: string) {
   const modules: Record<string, unknown>[] = [];
   const links = visibleRecommendations(content.links);
   links.forEach((link, index) => {
-    const imageUri = link.iconAssetId ? assetUrl(baseUrl, card, link.iconAssetId) : linkIconUrl(baseUrl, card, `link:${link.id}`);
+    const imageUri = linkIconUrl(baseUrl, card, `link:${link.id}`);
     modules.push({
       header: localized(link.label),
       ...(link.subtitle ? { body: localized(link.subtitle) } : {}),

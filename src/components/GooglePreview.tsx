@@ -61,28 +61,31 @@ function ModuleIcon({
   icon,
   assetId,
   cardId,
-  accent,
+  background,
 }: {
   icon: LinkIcon;
   assetId?: string | null;
   cardId?: string;
-  accent: string;
+  background: string;
 }) {
-  if (assetId && cardId) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={`/api/cards/${cardId}/asset/${assetId}`} alt="" className="h-8 w-8 rounded-full object-cover" />
-    );
-  }
+  const foreground = accentText(background);
   return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: accent, color: accentText(accent) }}>
-      <Glyph path={LINK_ICON_PATHS[icon]} size={16} />
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg" style={{ background }}>
+      {assetId && cardId ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`/api/cards/${cardId}/asset/${assetId}`} alt="" className="h-full w-full object-contain p-1" />
+      ) : (
+        <span style={{ color: foreground }}>
+          <Glyph path={LINK_ICON_PATHS[icon]} size={16} />
+        </span>
+      )}
     </span>
   );
 }
 
 export function GooglePreview(props: GooglePreviewProps) {
   const config = normalizeGoogleConfig(props.googleConfig);
+  const iconBackground = props.contentConfig.recommendations.iconBackground || props.accentColor;
   const hero = cardUsesHero({ dayGlow: props.glowHue != null, backgroundType: props.backgroundType });
   const style = cardBackgroundStyle({
     backgroundType: props.backgroundType,
@@ -193,7 +196,7 @@ export function GooglePreview(props: GooglePreviewProps) {
             </div>
             {modules.map((module) => (
               <div key={module.key} className="flex items-center gap-3 rounded-lg px-2 py-1.5" style={{ background: "rgba(127,127,127,0.12)" }}>
-                <ModuleIcon icon={module.icon} assetId={module.assetId} cardId={props.cardId} accent={props.accentColor} />
+                <ModuleIcon icon={module.icon} assetId={module.assetId} cardId={props.cardId} background={iconBackground} />
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium">{module.header}</div>
                   {module.body && (

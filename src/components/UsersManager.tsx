@@ -81,7 +81,7 @@ export function UsersManager({ users, currentUserId }: { users: UserRow[]; curre
         <h2 className="mb-4 text-lg font-semibold">Usuarios</h2>
         <div className="space-y-4">
           {users.map((u) => (
-            <div key={u.id} className="rounded-lg border border-border p-4">
+            <div key={u.id} className="rounded-xl border border-border bg-surface p-4 shadow-[var(--shadow-sm)]">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">

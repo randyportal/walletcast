@@ -3,7 +3,7 @@ import sharp from "sharp";
 import { createTestDb } from "@/lib/testing/db";
 import { createCardRepository } from "@/lib/cards/repository";
 import { CardInputSchema } from "@/lib/cards/validation";
-import { generateDefaultIcon, processBackgroundUpload, processFaviconUpload, renderCardHero, renderCardIcon, renderCardStrips } from "./images";
+import { generateDefaultIcon, processBackgroundUpload, processFaviconUpload, renderCardHero, renderCardIcon, renderCardStrips, renderCustomLinkIcon, renderLinkIcon } from "./images";
 
 async function pngFile(w: number, h: number, type = "image/png"): Promise<File> {
   const buf = await sharp({ create: { width: w, height: h, channels: 3, background: "#336699" } }).png().toBuffer();
@@ -39,6 +39,19 @@ describe("image processing", () => {
     const c = await card({ iconSource: "preset", iconPreset: "star", iconShape: "circle", bgColor: "#000000", fgColor: "#ffffff" });
     const icon = await renderCardIcon(c);
     expect((await sharp(icon).metadata()).width).toBe(87);
+  });
+
+  it("renders recommendation icons with an opaque background", async () => {
+    const png = await renderLinkIcon("star", "#ebc400", "#000000");
+    const { data } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    expect([data[0], data[1], data[2], data[3]]).toEqual([235, 196, 0, 255]);
+  });
+
+  it("flattens uploaded icons onto the recommendation background", async () => {
+    const transparent = await sharp({ create: { width: 100, height: 100, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
+    const png = await renderCustomLinkIcon(transparent, "#112233");
+    const { data } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    expect([data[0], data[1], data[2], data[3]]).toEqual([17, 34, 51, 255]);
   });
 
   it("keeps the default icon helper working", async () => {

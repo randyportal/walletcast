@@ -13,6 +13,8 @@ import { SendForm } from "@/components/SendForm";
 import { QrPanel } from "@/components/QrPanel";
 import { deleteCardAction, sendMessageAction, syncGoogleCardAction, updateCardAction } from "@/server/actions";
 import { requireAdmin } from "@/server/auth";
+import { Glyph, UI_ICON_PATHS } from "@/components/icons";
+import Link from "next/link";
 
 export const metadata: Metadata = { title: "Tarjeta" };
 
@@ -41,22 +43,32 @@ export default async function CardPage({ params, searchParams }: PageProps<"/das
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-sm text-muted">{card.organizationName}</p>
-          <h1 className="text-2xl font-semibold">{card.name}</h1>
+      <div className="space-y-4">
+        <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-foreground">
+          <Glyph path={UI_ICON_PATHS.chevronLeft} size={16} /> Tarjetas
+        </Link>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">{card.organizationName}</p>
+            <h1 className="mt-1 text-3xl font-bold tracking-tight">{card.name}</h1>
+            <p className="mt-2 text-sm text-muted">Diseño, recomendaciones y notificaciones de esta tarjeta.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <a href={link} target="_blank" className="btn-secondary" rel="noreferrer">
+              Abrir página pública <Glyph path={UI_ICON_PATHS.external} size={15} />
+            </a>
+            {config.google && (
+              <form action={syncGoogleCardAction.bind(null, card.id)}>
+                <button className="btn-secondary">
+                  <Glyph path={UI_ICON_PATHS.refresh} size={15} /> Sincronizar Google
+                </button>
+              </form>
+            )}
+          </div>
         </div>
-        <a href={link} target="_blank" className="btn-secondary" rel="noreferrer">
-          Abrir página pública ↗
-        </a>
-        {config.google && (
-          <form action={syncGoogleCardAction.bind(null, card.id)}>
-            <button className="btn-secondary">Sincronizar pases Google</button>
-          </form>
-        )}
       </div>
 
-      {googleSynced === "1" && <p className="text-sm text-success">Pases de Google actualizados.</p>}
+      {googleSynced === "1" && <p role="status" className="rounded-xl border border-success/20 bg-success/10 px-3 py-2 text-sm text-success">Pases de Google actualizados.</p>}
       {googleError === "not-configured" && <p className="text-sm text-warning">Google Wallet no está configurado en este servidor.</p>}
       {typeof googleWarn === "string" && <p className="text-sm text-warning">{googleWarn}</p>}
 
@@ -139,8 +151,11 @@ export default async function CardPage({ params, searchParams }: PageProps<"/das
         </section>
       </div>
 
-      <section className="panel">
-        <h2 className="mb-6 text-lg font-semibold">Diseño y detalles</h2>
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight">Editor de la tarjeta</h2>
+          <p className="mt-1 text-sm text-muted">Elige una sección, edita y revisa la vista previa antes de guardar.</p>
+        </div>
         <CardForm
           action={updateCardAction.bind(null, card.id)}
           submitLabel="Guardar cambios"

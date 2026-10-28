@@ -9,11 +9,9 @@ import { normaliseSource } from "@/lib/cards/links";
 import { cardBackgroundStyle, contrastRatio } from "@/lib/cards/design";
 import { fontStack } from "@/lib/cards/fonts";
 import { faviconIcons } from "@/lib/cards/favicon";
-import { LINK_ICON_PATHS } from "@/lib/cards/icon-paths";
 import { glowSlot, slotHue } from "@/lib/glow/hue";
 import { PassPreview } from "@/components/PassPreview";
 import { GooglePreview } from "@/components/GooglePreview";
-import { Glyph } from "@/components/icons";
 import { normalizeGoogleConfig } from "@/lib/cards/google";
 import { normalizeAppleConfig } from "@/lib/cards/apple";
 import { normalizeContent, previousMessages, visibleRecommendations } from "@/lib/cards/content";
@@ -172,7 +170,7 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
 
   return (
     <main
-      className="flex flex-1 flex-col items-center px-5 py-10"
+      className="flex flex-1 flex-col items-center px-4 py-8 sm:py-12"
       style={{
         backgroundColor: style.backgroundColor,
         backgroundImage: style.backgroundImage,
@@ -182,7 +180,7 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
         fontFamily: fontStack(card.fontFamily),
       }}
     >
-      <div className="w-full max-w-sm space-y-6">
+      <div className="w-full max-w-sm space-y-5">
         {preview}
 
         {minimal ? (
@@ -194,8 +192,8 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
         ) : (
           <>
             <div className="space-y-2 text-center">
-              <h1 className="text-xl font-semibold">Agrega {card.name} a tu cartera</h1>
-              {card.description && <p className="text-sm" style={{ color: card.labelColor }}>{card.description}</p>}
+              <h1 className="text-2xl font-bold tracking-tight">Agrega {card.name} a tu cartera</h1>
+              {card.description && <p className="text-sm leading-relaxed" style={{ color: card.labelColor }}>{card.description}</p>}
               <p className="text-xs" style={{ color: card.labelColor }}>Sin app ni cuenta. Elimina la tarjeta cuando quieras para dejar de recibir avisos.</p>
             </div>
 
@@ -223,12 +221,12 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
                           : { border: "1px solid currentColor", color: card.fgColor }
                     }
                   >
-                    {link.iconAssetId ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={`/api/cards/${card.id}/asset/${link.iconAssetId}`} alt="" className="h-5 w-5 rounded-full object-cover" />
-                    ) : (
-                      <Glyph path={LINK_ICON_PATHS[link.icon]} size={18} />
-                    )}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`/api/cards/${card.id}/link-icon/link:${link.id}?v=${card.updatedAt.getTime()}`}
+                      alt=""
+                      className="h-6 w-6 shrink-0 rounded-md object-cover"
+                    />
                     <span className="min-w-0">
                       <span className="block truncate">{link.label}</span>
                       {link.subtitle && <span className="block truncate text-xs opacity-80">{link.subtitle}</span>}
@@ -250,6 +248,10 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
             )}
           </>
         )}
+
+        <p className="pt-2 text-center text-[10px] font-medium uppercase tracking-[0.2em]" style={{ color: card.labelColor }}>
+          Travel Portal Wallet Card
+        </p>
       </div>
     </main>
   );

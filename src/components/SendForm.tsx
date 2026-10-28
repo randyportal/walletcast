@@ -84,8 +84,8 @@ export function SendForm({ action, subscriberCount, organizationName, cardName, 
           {pending ? "Enviando…" : `Enviar a ${subscriberCount}`}
         </button>
       </div>
-      {state.error && <p className="text-sm text-danger">{state.error}</p>}
-      {state.success && <p className="text-sm text-success">{state.success}</p>}
+      {state.error && <p role="alert" className="text-sm text-danger">{state.error}</p>}
+      {state.success && <p role="status" className="text-sm text-success">{state.success}</p>}
       {state.warnings?.map((w) => (
         <p key={w} className="text-xs text-warning">
           {w}

@@ -230,7 +230,7 @@ describe("google object mapping", () => {
         contentConfig: {
           version: 2,
           latest: { show: false, showHistory: true, historyTitle: "Historial", historyLimit: 5 },
-          recommendations: { show: true, title: "Recomendaciones" },
+          recommendations: { show: true, title: "Recomendaciones", iconBackground: "" },
         },
         links: [
           { id: "visible", label: "Visible", subtitle: "Sí", url: "https://visible.example", icon: "star", style: "secondary", iconAssetId: null, kind: "custom", visible: true },

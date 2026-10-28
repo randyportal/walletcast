@@ -29,7 +29,7 @@ import { DEFAULT_CONTENT_CONFIG, type ContentConfig } from "@/lib/cards/content"
 import { ICON_PATHS, LINK_ICON_PATHS } from "@/lib/cards/icon-paths";
 import { PassPreview } from "./PassPreview";
 import { GooglePreview } from "./GooglePreview";
-import { Glyph } from "./icons";
+import { Glyph, UI_ICON_PATHS } from "./icons";
 
 export interface CardFormValues {
   name: string;
@@ -179,16 +179,18 @@ function hostOf(url: string): string {
 function IconPicker({ value, onChange }: { value: LinkIcon; onChange: (icon: LinkIcon) => void }) {
   return (
     <details className="relative">
-      <summary className="btn-secondary cursor-pointer px-2 py-1 text-xs">
+      <summary className="btn-secondary list-none cursor-pointer px-2 py-1 text-xs [&::-webkit-details-marker]:hidden">
         <Glyph path={LINK_ICON_PATHS[value]} size={14} /> Icono
       </summary>
-      <div className="mt-2 grid grid-cols-9 gap-1 rounded-lg border border-border bg-surface p-2">
+      <div className="mt-2 grid grid-cols-6 gap-1 rounded-lg border border-border bg-surface p-2">
         {LINK_ICONS.map((icon) => (
           <button
             key={icon}
             type="button"
             title={LINK_ICON_LABELS[icon] ?? icon}
-            className={`flex h-7 w-7 items-center justify-center rounded ${value === icon ? "bg-accent text-accent-foreground" : "text-muted hover:text-foreground"}`}
+            aria-label={`Icono ${LINK_ICON_LABELS[icon] ?? icon}`}
+            aria-pressed={value === icon}
+            className={`flex h-9 w-9 items-center justify-center rounded ${value === icon ? "bg-accent text-accent-foreground" : "text-muted hover:text-foreground"}`}
             onClick={() => onChange(icon)}
           >
             <Glyph path={LINK_ICON_PATHS[icon]} size={14} />
@@ -211,6 +213,30 @@ const TABS = [
   { id: "advanced", label: "Avanzado" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
+
+const TAB_ICONS: Record<Tab, keyof typeof UI_ICON_PATHS> = {
+  content: "message",
+  design: "palette",
+  code: "code",
+  recommendations: "star",
+  google: "wallet",
+  apple: "wallet",
+  messages: "send",
+  public: "public",
+  advanced: "settings",
+};
+
+const TAB_HINTS: Record<Tab, string> = {
+  content: "Nombre, textos y enlaces base",
+  design: "Colores, fondo, logo e icono",
+  code: "QR, código de barras y visibilidad",
+  recommendations: "Accesos con icono para la tarjeta",
+  google: "Botón, módulos y detalles del pase",
+  apple: "Campos y enlaces del reverso",
+  messages: "Último mensaje e historial",
+  public: "Cómo se ve al agregar la tarjeta",
+  advanced: "Brillo por hora del día",
+};
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
@@ -313,6 +339,9 @@ export function CardForm(props: Props) {
   const update = (patch: Partial<CardFormValues>) => setValues((prev) => ({ ...prev, ...patch }));
   const google = values.googleConfig;
   const apple = values.appleConfig;
+  const iconBackground = /^#[0-9a-fA-F]{6}$/.test(values.contentConfig.recommendations.iconBackground)
+    ? values.contentConfig.recommendations.iconBackground
+    : values.accentColor;
   const setGoogle = (patch: Partial<GoogleConfig>) => update({ googleConfig: { ...google, ...patch } });
   const setApple = (patch: Partial<AppleConfig>) => update({ appleConfig: { ...apple, ...patch } });
 
@@ -405,18 +434,38 @@ export function CardForm(props: Props) {
   const sectionClass = (id: Tab) => `panel ${tab === id ? "" : "hidden"}`;
 
   return (
-    <form action={formAction} className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px]">
-      <div className="space-y-5">
-        <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-surface p-1" role="tablist" aria-label="Secciones de la tarjeta">
+    <form action={formAction} className="grid items-start gap-6 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_400px]">
+      <aside className="sticky top-6 hidden self-start rounded-2xl border border-border bg-surface p-2 shadow-[var(--shadow-sm)] lg:block">
+        <nav className="flex flex-col gap-1" aria-label="Secciones de la tarjeta">
           {TABS.map((item) => (
             <button
               key={item.id}
               type="button"
-              role="tab"
-              aria-selected={tab === item.id}
-              className={`btn px-3 py-1.5 text-xs ${tab === item.id ? "bg-accent text-accent-foreground" : "text-muted hover:text-foreground"}`}
+              aria-current={tab === item.id ? "step" : undefined}
+              className={`section-nav ${tab === item.id ? "section-nav-active" : ""}`}
               onClick={() => setTab(item.id)}
             >
+              <Glyph path={UI_ICON_PATHS[TAB_ICONS[item.id]]} size={17} />
+              <span className="min-w-0">
+                <span className="block">{item.label}</span>
+                <span className="block truncate text-[11px] font-normal text-muted">{TAB_HINTS[item.id]}</span>
+              </span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      <div className="min-w-0 space-y-5">
+        <div className="flex gap-1 overflow-x-auto rounded-2xl border border-border bg-surface p-1 shadow-[var(--shadow-sm)] lg:hidden" aria-label="Secciones de la tarjeta">
+          {TABS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              aria-current={tab === item.id ? "step" : undefined}
+              className={`flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-xs font-semibold ${tab === item.id ? "bg-accent text-accent-foreground" : "text-muted"}`}
+              onClick={() => setTab(item.id)}
+            >
+              <Glyph path={UI_ICON_PATHS[TAB_ICONS[item.id]]} size={14} />
               {item.label}
             </button>
           ))}
@@ -711,7 +760,7 @@ export function CardForm(props: Props) {
               </div>
               {!values.websiteUrl && <p className="field-hint">Agrega el sitio web en Contenido para poder incluirlo.</p>}
               {!values.contactUrl && <p className="field-hint">Agrega el archivo de contacto en Contenido para poder incluirlo.</p>}
-              <div className="mt-3 flex flex-wrap items-center gap-3">
+              <div className="mt-3 flex flex-wrap items-end gap-3">
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={values.contentConfig.recommendations.show} onChange={(e) => setRecommendations({ show: e.target.checked })} />
                   Mostrar recomendaciones
@@ -720,6 +769,34 @@ export function CardForm(props: Props) {
                   Título
                   <input className="input max-w-48" maxLength={35} value={values.contentConfig.recommendations.title} onChange={(e) => setRecommendations({ title: e.target.value })} />
                 </label>
+                <label className="block">
+                  <span className="field-label">Fondo de iconos</span>
+                  <div className="flex items-center gap-2">
+                    <input type="color" value={iconBackground} onChange={(e) => setRecommendations({ iconBackground: e.target.value })} className="h-10 w-12 cursor-pointer rounded-lg border border-border bg-surface" />
+                    <input className="input w-28 font-mono text-xs" maxLength={7} value={values.contentConfig.recommendations.iconBackground || values.accentColor} onChange={(e) => setRecommendations({ iconBackground: e.target.value })} />
+                    <button type="button" className="text-xs underline" onClick={() => setRecommendations({ iconBackground: "" })}>Usar acento</button>
+                  </div>
+                  <p className="field-hint">Se aplica a iconos preset y subidos. Evita el fondo blanco de Google Wallet.</p>
+                </label>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background/60 p-2">
+                <span className="text-xs text-muted">Muestra:</span>
+                {values.links.filter((link) => link.visible).slice(0, 5).map((link) => (
+                  <span key={link.id} className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-md" style={{ background: iconBackground }}>
+                    {linkIconPreviews[link.id] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={linkIconPreviews[link.id]} alt="" className="h-full w-full object-contain p-1" />
+                    ) : link.iconAssetId && cardId ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={`/api/cards/${cardId}/asset/${link.iconAssetId}`} alt="" className="h-full w-full object-contain p-1" />
+                    ) : (
+                      <span style={{ color: contrastRatio(iconBackground, "#000000") >= contrastRatio(iconBackground, "#ffffff") ? "#000" : "#fff" }}>
+                        <Glyph path={LINK_ICON_PATHS[link.icon]} size={15} />
+                      </span>
+                    )}
+                  </span>
+                ))}
+                {values.links.filter((link) => link.visible).length === 0 && <span className="text-xs text-muted">Agrega una recomendación visible.</span>}
               </div>
               <div className="mt-3 space-y-3">
                 {values.links.map((link, i) => (
@@ -735,9 +812,9 @@ export function CardForm(props: Props) {
                         onChange={(e) => setLinkUrl(link.id, e.target.value)}
                       />
                       <div className="flex items-center gap-1">
-                        <button type="button" className="btn-secondary px-2" disabled={i === 0} onClick={() => moveLink(link.id, -1)}>↑</button>
-                        <button type="button" className="btn-secondary px-2" disabled={i === values.links.length - 1} onClick={() => moveLink(link.id, 1)}>↓</button>
-                        <button type="button" className="btn-danger px-2" onClick={() => removeLink(link.id)}>×</button>
+                        <button type="button" className="btn-secondary px-2" aria-label="Mover recomendación arriba" disabled={i === 0} onClick={() => moveLink(link.id, -1)}><Glyph path={UI_ICON_PATHS.arrowUp} size={14} /></button>
+                        <button type="button" className="btn-secondary px-2" aria-label="Mover recomendación abajo" disabled={i === values.links.length - 1} onClick={() => moveLink(link.id, 1)}><Glyph path={UI_ICON_PATHS.arrowDown} size={14} /></button>
+                        <button type="button" className="btn-danger px-2" aria-label="Eliminar recomendación" onClick={() => removeLink(link.id)}><Glyph path={UI_ICON_PATHS.trash} size={14} /></button>
                       </div>
                     </div>
                     <input value={link.subtitle} placeholder="Subtítulo corto (opcional)" maxLength={50} className="input" onChange={(e) => patchLink(link.id, { subtitle: e.target.value })} />
@@ -753,15 +830,17 @@ export function CardForm(props: Props) {
                           <option key={s} value={s}>{LINK_STYLE_LABELS[s] ?? s}</option>
                         ))}
                       </select>
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: values.accentColor, color: contrastRatio(values.accentColor, "#000000") >= contrastRatio(values.accentColor, "#ffffff") ? "#000" : "#fff" }}>
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md" style={{ background: iconBackground }}>
                         {linkIconPreviews[link.id] ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={linkIconPreviews[link.id]} alt="" className="h-8 w-8 rounded-full object-cover" />
+                          <img src={linkIconPreviews[link.id]} alt="" className="h-full w-full object-contain p-1" />
                         ) : link.iconAssetId && cardId ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={`/api/cards/${cardId}/asset/${link.iconAssetId}`} alt="" className="h-8 w-8 rounded-full object-cover" />
+                          <img src={`/api/cards/${cardId}/asset/${link.iconAssetId}`} alt="" className="h-full w-full object-contain p-1" />
                         ) : (
-                          <Glyph path={LINK_ICON_PATHS[link.icon]} size={16} />
+                          <span style={{ color: contrastRatio(iconBackground, "#000000") >= contrastRatio(iconBackground, "#ffffff") ? "#000" : "#fff" }}>
+                            <Glyph path={LINK_ICON_PATHS[link.icon]} size={16} />
+                          </span>
                         )}
                       </span>
                       <input
@@ -880,7 +959,7 @@ export function CardForm(props: Props) {
                   <div key={textModule.id} className="grid gap-2 sm:grid-cols-[1fr_1.5fr_auto]">
                     <input className="input" placeholder="Encabezado" maxLength={35} value={textModule.header} onChange={(e) => patchTextModule(textModule.id, { header: e.target.value })} />
                     <input className="input" placeholder="Texto" maxLength={500} value={textModule.body} onChange={(e) => patchTextModule(textModule.id, { body: e.target.value })} />
-                    <button type="button" className="btn-danger px-2" onClick={() => removeTextModule(textModule.id)}>×</button>
+                    <button type="button" className="btn-danger px-2" aria-label="Eliminar módulo de texto" onClick={() => removeTextModule(textModule.id)}><Glyph path={UI_ICON_PATHS.trash} size={14} /></button>
                   </div>
                 ))}
               </div>
@@ -972,7 +1051,7 @@ export function CardForm(props: Props) {
                   <div key={textModule.id} className="grid gap-2 sm:grid-cols-[1fr_1.5fr_auto]">
                     <input className="input" placeholder="Encabezado" maxLength={35} value={textModule.header} onChange={(e) => patchAppleTextModule(textModule.id, { header: e.target.value })} />
                     <input className="input" placeholder="Texto" maxLength={500} value={textModule.body} onChange={(e) => patchAppleTextModule(textModule.id, { body: e.target.value })} />
-                    <button type="button" className="btn-danger px-2" onClick={() => removeAppleTextModule(textModule.id)}>×</button>
+                    <button type="button" className="btn-danger px-2" aria-label="Eliminar módulo de Apple" onClick={() => removeAppleTextModule(textModule.id)}><Glyph path={UI_ICON_PATHS.trash} size={14} /></button>
                   </div>
                 ))}
               </div>
@@ -1079,7 +1158,7 @@ export function CardForm(props: Props) {
                       <option value="front">Frente</option>
                       <option value="back">Reverso</option>
                     </select>
-                    <button type="button" className="btn-danger px-2" onClick={() => removeField(f.id)}>×</button>
+                    <button type="button" className="btn-danger px-2" aria-label="Eliminar campo" onClick={() => removeField(f.id)}><Glyph path={UI_ICON_PATHS.trash} size={14} /></button>
                   </div>
                 ))}
               </div>
@@ -1112,21 +1191,30 @@ export function CardForm(props: Props) {
         {!isImage && <input type="hidden" name="backgroundOverlayColor" value={values.backgroundOverlayColor} />}
         {values.barcodeContent !== "custom" && <input type="hidden" name="barcodeValue" value="" />}
 
-        {state.error && <p className="text-sm text-danger">{state.error}</p>}
-        {state.success && <p className="text-sm text-success">{state.success}</p>}
-        {state.warnings?.map((warning) => (
-          <p key={warning} className="text-xs text-warning">{warning}</p>
-        ))}
-        <button type="submit" className="btn-primary" disabled={pending}>
-          {pending ? "Guardando…" : submitLabel}
-        </button>
+        <div className="sticky bottom-4 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface/95 p-3 shadow-[var(--shadow-md)] backdrop-blur-xl">
+          <div className="min-w-0 space-y-1">
+            {state.error ? (
+              <p role="alert" className="text-sm text-danger">{state.error}</p>
+            ) : state.success ? (
+              <p role="status" className="text-sm text-success">{state.success}</p>
+            ) : (
+              <p className="text-xs text-muted">Los cambios se aplican al guardar.</p>
+            )}
+            {state.warnings?.map((warning) => (
+              <p key={warning} className="text-xs text-warning">{warning}</p>
+            ))}
+          </div>
+          <button type="submit" className="btn-primary" disabled={pending}>
+            {pending ? "Guardando…" : submitLabel}
+          </button>
+        </div>
       </div>
 
-      <div className="lg:sticky lg:top-6 lg:self-start">
-        <div className="mb-3 flex items-center gap-2">
-          <p className="text-sm font-medium text-muted">Vista previa</p>
-          <button type="button" className={`badge ${preview === "google" ? "text-accent" : ""}`} onClick={() => setPreview("google")}>Google</button>
-          <button type="button" className={`badge ${preview === "apple" ? "text-accent" : ""}`} onClick={() => setPreview("apple")}>Apple</button>
+      <div className="lg:col-span-2 xl:col-span-1 xl:sticky xl:top-6 xl:self-start">
+        <div className="mb-3 flex items-center gap-2 rounded-2xl border border-border bg-surface p-2 shadow-[var(--shadow-sm)]">
+          <p className="px-1 text-sm font-semibold">Vista previa</p>
+          <button type="button" aria-pressed={preview === "google"} className={`badge ${preview === "google" ? "border-accent/30 bg-accent/10 text-accent" : ""}`} onClick={() => setPreview("google")}>Google</button>
+          <button type="button" aria-pressed={preview === "apple"} className={`badge ${preview === "apple" ? "border-accent/30 bg-accent/10 text-accent" : ""}`} onClick={() => setPreview("apple")}>Apple</button>
         </div>
         {preview === "google" ? (
           <GooglePreview

@@ -21,7 +21,7 @@ export default async function SettingsPage() {
   ];
   return (
     <div className="max-w-3xl space-y-6">
-      <h1 className="text-2xl font-semibold">Ajustes</h1>
+      <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Configuración</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Ajustes</h1></div>
       <p className="text-sm text-muted">
         Travel Portal Wallet Card se configura con variables de entorno, así que los secretos nunca se guardan en la base de datos. Cámbialos en tu servidor (Vercel, Docker, .env.local) y reinicia.
       </p>

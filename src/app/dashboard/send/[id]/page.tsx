@@ -6,6 +6,7 @@ import { SendForm } from "@/components/SendForm";
 import { sendMessageAction } from "@/server/actions";
 import { requireUser } from "@/server/auth";
 import { GOOGLE_DAILY_NOTIFICATION_LIMIT } from "@/lib/broadcast/broadcast";
+import { Glyph, UI_ICON_PATHS } from "@/components/icons";
 
 export const metadata: Metadata = { title: "Enviar" };
 
@@ -23,15 +24,22 @@ export default async function SendCardPage({ params }: PageProps<"/dashboard/sen
   const googleRemaining = Math.max(0, GOOGLE_DAILY_NOTIFICATION_LIMIT - googleToday);
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
-      <div>
-        <p className="text-sm text-muted">{card.organizationName}</p>
-        <h1 className="text-2xl font-semibold">{card.name}</h1>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <Link href="/dashboard/send" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-foreground">
+        <Glyph path={UI_ICON_PATHS.chevronLeft} size={16} /> Volver a tarjetas
+      </Link>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">{card.organizationName}</p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight">{card.name}</h1>
+          <p className="mt-2 text-sm text-muted">Escribe el mensaje y revisa cómo se verá antes de enviarlo.</p>
+        </div>
+        <span className="badge">{total} cartera(s)</span>
       </div>
 
       <section className="panel">
-        <h2 className="mb-1 text-lg font-semibold">Enviar una notificación</h2>
-        <p className="mb-4 text-sm text-muted">
+        <h2 className="mb-1 text-xl font-bold tracking-tight">Enviar una notificación</h2>
+        <p className="mb-5 text-sm text-muted">
           Aparece en la pantalla de bloqueo de todos los que tienen la tarjeta y queda como el último mensaje.
         </p>
         <SendForm
@@ -45,9 +53,6 @@ export default async function SendCardPage({ params }: PageProps<"/dashboard/sen
         />
       </section>
 
-      <Link href="/dashboard/send" className="btn-secondary">
-        ← Volver a tarjetas
-      </Link>
     </div>
   );
 }

@@ -15,6 +15,8 @@ export interface ContentConfig {
   recommendations: {
     show: boolean;
     title: string;
+    /** Opaque tile colour for Google/Apple recommendation icons. Empty = card accent. */
+    iconBackground: string;
   };
 }
 
@@ -22,7 +24,7 @@ export interface ContentConfig {
 export const LEGACY_CONTENT_CONFIG: ContentConfig = {
   version: 0,
   latest: { show: true, showHistory: true, historyTitle: "Mensajes recientes", historyLimit: 5 },
-  recommendations: { show: true, title: "Recomendaciones" },
+  recommendations: { show: true, title: "Recomendaciones", iconBackground: "" },
 };
 
 /** Default used by the editor for new cards and after the legacy migration. */
@@ -45,8 +47,14 @@ export const ContentConfigSchema = z.object({
     .object({
       show: z.boolean().default(true),
       title: z.string().trim().max(35, "Máximo 35 caracteres").default("Recomendaciones"),
+      iconBackground: z
+        .string()
+        .trim()
+        .max(7)
+        .refine((value) => value === "" || /^#[0-9a-fA-F]{6}$/.test(value), "Usa un color hex de 6 dígitos")
+        .default(""),
     })
-    .default({ show: true, title: "Recomendaciones" }),
+    .default({ show: true, title: "Recomendaciones", iconBackground: "" }),
 });
 
 export const ContentConfigInputSchema = z.preprocess((value) => {
