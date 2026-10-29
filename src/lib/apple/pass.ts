@@ -7,6 +7,8 @@ import { APPLE_BARCODE_FORMATS, resolveBarcode } from "@/lib/cards/barcode";
 import { glowSlot, slotHue } from "@/lib/glow/hue";
 import { normalizeAppleConfig } from "@/lib/cards/apple";
 import { type HistoryMessage, historyText, normalizeContent, visibleRecommendations } from "@/lib/cards/content";
+import { type LoyaltyPassData, loyaltySummary } from "@/lib/loyalty/wallet";
+import { issuedCardUrl, staffScanUrl } from "@/lib/cards/links";
 
 export const APPLE_WEB_SERVICE_PATH = "/api/apple";
 export const LATEST_FIELD_KEY = "latest";
@@ -46,6 +48,8 @@ export interface BuildApplePassArgs {
   history?: HistoryMessage[];
   /** Time zone whose hour picks the day-glow strip. */
   timeZone?: string;
+  /** Customer loyalty state for issued cards. */
+  loyalty?: LoyaltyPassData | null;
   now?: Date;
 }
 
@@ -57,14 +61,18 @@ export async function buildApplePass({
   baseUrl,
   history = [],
   timeZone = "Europe/Rome",
+  loyalty = null,
   now = new Date(),
 }: BuildApplePassArgs): Promise<Buffer> {
   const appleConfig = normalizeAppleConfig(card.appleConfig);
   const content = normalizeContent(card);
   const recommendations = visibleRecommendations(content.links);
   const hero = cardUsesHero(card) || Boolean(card.appleImage);
-  const style = hero ? "storeCard" : "generic";
-  const barcode = resolveBarcode(card, baseUrl);
+  const style = hero || loyalty ? "storeCard" : "generic";
+  const summary = loyalty ? loyaltySummary(loyalty, card.stampsRequired, card.rewardName, timeZone) : null;
+  const barcode = loyalty
+    ? { format: "qr" as const, value: staffScanUrl(baseUrl, loyalty.issuedCard.token) }
+    : resolveBarcode(card, baseUrl);
   const passJson = {
     formatVersion: 1,
     passTypeIdentifier: apple.passTypeId,
@@ -110,11 +118,23 @@ export async function buildApplePass({
     },
   );
 
-  if (card.headerValue) {
+  if (summary) {
+    pass.headerFields.push({
+      key: "stamps",
+      label: "SELLOS",
+      value: `${summary.stamps}/${summary.totalStamps}`,
+      changeMessage: "Sellos: %@",
+    });
+  } else if (card.headerValue) {
     pass.headerFields.push({ key: "header", label: card.headerLabel.toUpperCase(), value: card.headerValue });
   }
   pass.primaryFields.push({ key: "name", label: (card.nameLabel || card.organizationName).toUpperCase(), value: card.name });
-  if (content.config.latest.show) {
+  if (summary) {
+    pass.secondaryFields.push({ key: "reward", label: "RECOMPENSA", value: summary.rewardName || "Lealtad" });
+    pass.secondaryFields.push({ key: "loyalty_status", label: "ESTADO", value: summary.statusLabel });
+    pass.auxiliaryFields.push({ key: "loyalty_customer", label: "CLIENTE", value: summary.customerName });
+    pass.auxiliaryFields.push({ key: "loyalty_last_visit", label: "ÚLTIMA VISITA", value: summary.lastVisit });
+  } else if (content.config.latest.show) {
     pass.secondaryFields.push({
       key: LATEST_FIELD_KEY,
       label: card.latestLabel,
@@ -123,13 +143,19 @@ export async function buildApplePass({
     });
   }
   if (appleConfig.showCustomFields) {
-    for (const field of card.customFields.filter((f) => f.location === "front").slice(0, 4)) {
+    for (const field of card.customFields.filter((f) => f.location === "front").slice(0, summary ? 2 : 4)) {
       pass.auxiliaryFields.push({ key: `cf_${field.id}`, label: field.label.toUpperCase(), value: field.value });
     }
   }
 
   const back = [
-    !content.config.latest.show && {
+    summary && content.config.latest.show && {
+      key: LATEST_FIELD_KEY,
+      label: card.latestLabel || "Último mensaje",
+      value: latestMessageText(card),
+      changeMessage: "%@",
+    },
+    !summary && !content.config.latest.show && {
       key: LATEST_FIELD_KEY,
       label: card.latestLabel || "Último mensaje",
       value: latestMessageText(card),
@@ -139,6 +165,16 @@ export async function buildApplePass({
       key: "history",
       label: content.config.latest.historyTitle,
       value: historyText(history, content.config.latest.historyLimit),
+    },
+    summary && {
+      key: "loyalty_history",
+      label: "Historial de lealtad",
+      value: summary.history || "Sin movimientos todavía.",
+    },
+    summary && {
+      key: "loyalty_link",
+      label: "Mi tarjeta",
+      value: issuedCardUrl(baseUrl, card.slug, loyalty!.issuedCard.token),
     },
     appleConfig.showDescription && card.description && { key: "about", label: "Acerca de", value: card.description },
     ...(content.config.recommendations.show

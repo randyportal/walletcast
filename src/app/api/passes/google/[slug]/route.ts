@@ -16,6 +16,8 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/passes/
   const { config, cards, subscribers, googleApi } = await getServices();
   const card = await cards.findBySlug(slug);
   if (!card) return jsonError(404, "Tarjeta no encontrada");
+  if (card.archivedAt) return jsonError(410, "Esta campaña está archivada.");
+  if (card.loyaltyEnabled) return jsonError(400, "Esta tarjeta requiere un alta de lealtad.");
   if (!googleApi) return publicError(request, slug, 404, "Google Wallet no está configurado");
 
   const parsed = IssueRequestSchema.safeParse(await readFields(request));

@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   customType,
@@ -36,6 +37,9 @@ export const organizations = pgTable("organizations", {
   locale: text("locale").notNull().default("es"),
   ...timestamps,
 });
+
+export const JOIN_CONTACT_POLICIES = ["optional", "email", "mobile", "email_or_mobile"] as const;
+export type JoinContactPolicy = (typeof JOIN_CONTACT_POLICIES)[number];
 
 export const cards = pgTable("cards", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -90,6 +94,15 @@ export const cards = pgTable("cards", {
   publicPageMode: text("public_page_mode").notNull().default("full"),
   askEmail: boolean("ask_email").notNull().default(true),
   emailRequired: boolean("email_required").notNull().default(false),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  loyaltyEnabled: boolean("loyalty_enabled").notNull().default(false),
+  stampsRequired: integer("stamps_required").notNull().default(10),
+  rewardName: text("reward_name").notNull().default(""),
+  loyaltyJoinEnabled: boolean("loyalty_join_enabled").notNull().default(true),
+  joinContactPolicy: text("join_contact_policy", { enum: JOIN_CONTACT_POLICIES }).notNull().default("optional"),
+  notifyOnStamp: boolean("notify_on_stamp").notNull().default(false),
+  notifyOnReward: boolean("notify_on_reward").notNull().default(true),
+  notifyOnRedeem: boolean("notify_on_redeem").notNull().default(true),
   ...timestamps,
 });
 
@@ -108,6 +121,67 @@ export const cardAssets = pgTable(
   (t) => [index("card_assets_card_idx").on(t.cardId)],
 );
 
+export const CUSTOMER_STATUSES = ["active", "inactive"] as const;
+export type CustomerStatus = (typeof CUSTOMER_STATUSES)[number];
+
+export const customers = pgTable(
+  "customers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    email: text("email"),
+    mobile: text("mobile"),
+    status: text("status", { enum: CUSTOMER_STATUSES }).notNull().default("active"),
+    ...timestamps,
+  },
+  (t) => [
+    index("customers_org_idx").on(t.organizationId),
+    uniqueIndex("customers_org_email_unique")
+      .on(t.organizationId, t.email)
+      .where(sql`${t.email} is not null`),
+    uniqueIndex("customers_org_mobile_unique")
+      .on(t.organizationId, t.mobile)
+      .where(sql`${t.mobile} is not null`),
+  ],
+);
+
+export const ISSUED_CARD_STATUSES = ["active", "redeemed", "revoked"] as const;
+export type IssuedCardStatus = (typeof ISSUED_CARD_STATUSES)[number];
+
+export const issuedCards = pgTable(
+  "issued_cards",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    cardId: uuid("card_id")
+      .notNull()
+      .references(() => cards.id, { onDelete: "cascade" }),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    token: uuid("token").notNull().defaultRandom().unique(),
+    stamps: integer("stamps").notNull().default(0),
+    status: text("status", { enum: ISSUED_CARD_STATUSES }).notNull().default("active"),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    lastVisitAt: timestamp("last_visit_at", { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    index("issued_cards_org_idx").on(t.organizationId),
+    index("issued_cards_customer_idx").on(t.customerId),
+    index("issued_cards_card_idx").on(t.cardId),
+    uniqueIndex("issued_cards_active_unique")
+      .on(t.customerId, t.cardId)
+      .where(sql`${t.status} = 'active'`),
+  ],
+);
+
 export const PLATFORMS = ["apple", "google"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
@@ -121,6 +195,7 @@ export const subscribers = pgTable(
     cardId: uuid("card_id")
       .notNull()
       .references(() => cards.id, { onDelete: "cascade" }),
+    issuedCardId: uuid("issued_card_id").references(() => issuedCards.id, { onDelete: "set null" }),
     platform: text("platform", { enum: PLATFORMS }).notNull(),
     serialNumber: text("serial_number").notNull().unique(),
     authToken: text("auth_token").notNull(),
@@ -129,7 +204,14 @@ export const subscribers = pgTable(
     status: text("status", { enum: ["active", "removed"] }).notNull().default("active"),
     ...timestamps,
   },
-  (t) => [index("subscribers_card_idx").on(t.cardId, t.platform, t.status), index("subscribers_org_idx").on(t.organizationId)],
+  (t) => [
+    index("subscribers_card_idx").on(t.cardId, t.platform, t.status),
+    index("subscribers_org_idx").on(t.organizationId),
+    index("subscribers_issued_card_idx").on(t.issuedCardId),
+    uniqueIndex("subscribers_issued_card_platform_unique")
+      .on(t.issuedCardId, t.platform)
+      .where(sql`${t.issuedCardId} is not null`),
+  ],
 );
 
 export const appleDevices = pgTable("apple_devices", {
@@ -233,6 +315,33 @@ export const invitations = pgTable(
   (t) => [index("invitations_org_idx").on(t.organizationId, t.email)],
 );
 
+export const CARD_TRANSACTION_TYPES = ["issued", "stamp_add", "stamp_remove", "redeem", "revoke"] as const;
+export type CardTransactionType = (typeof CARD_TRANSACTION_TYPES)[number];
+
+export const cardTransactions = pgTable(
+  "card_transactions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    issuedCardId: uuid("issued_card_id")
+      .notNull()
+      .references(() => issuedCards.id, { onDelete: "cascade" }),
+    type: text("type", { enum: CARD_TRANSACTION_TYPES }).notNull(),
+    amount: integer("amount").notNull().default(0),
+    remarks: text("remarks"),
+    actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+    actorName: text("actor_name"),
+    actorRole: text("actor_role", { enum: ORGANIZATION_ROLES }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("card_transactions_org_idx").on(t.organizationId),
+    index("card_transactions_card_idx").on(t.issuedCardId, t.createdAt),
+  ],
+);
+
 export type Organization = typeof organizations.$inferSelect;
 export type OrganizationMembership = typeof organizationMemberships.$inferSelect;
 export type Invitation = typeof invitations.$inferSelect;
@@ -244,3 +353,9 @@ export type Subscriber = typeof subscribers.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+export type Customer = typeof customers.$inferSelect;
+export type NewCustomer = typeof customers.$inferInsert;
+export type IssuedCard = typeof issuedCards.$inferSelect;
+export type NewIssuedCard = typeof issuedCards.$inferInsert;
+export type CardTransaction = typeof cardTransactions.$inferSelect;
+export type NewCardTransaction = typeof cardTransactions.$inferInsert;

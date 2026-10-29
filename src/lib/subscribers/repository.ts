@@ -12,9 +12,15 @@ import {
 export interface NewSubscriberInput {
   organizationId: string;
   cardId: string;
+  issuedCardId?: string | null;
   platform: Platform;
   email?: string | null;
   source?: string | null;
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  const e = error as { code?: string; cause?: { code?: string } };
+  return e?.code === "23505" || e?.cause?.code === "23505";
 }
 
 function randomToken(bytes: number): string {
@@ -29,6 +35,7 @@ export function createSubscriberRepository(db: Db) {
         .values({
           organizationId: input.organizationId,
           cardId: input.cardId,
+          issuedCardId: input.issuedCardId ?? null,
           platform: input.platform,
           email: input.email ?? null,
           source: input.source ?? null,
@@ -38,6 +45,38 @@ export function createSubscriberRepository(db: Db) {
         })
         .returning();
       return row;
+    },
+
+    async findForIssuedCard(
+      organizationId: string,
+      issuedCardId: string,
+      platform: Platform,
+    ): Promise<Subscriber | null> {
+      const [row] = await db
+        .select()
+        .from(subscribers)
+        .where(
+          and(
+            eq(subscribers.organizationId, organizationId),
+            eq(subscribers.issuedCardId, issuedCardId),
+            eq(subscribers.platform, platform),
+          ),
+        );
+      return row ?? null;
+    },
+
+    async ensureForIssuedCard(input: NewSubscriberInput & { issuedCardId: string }): Promise<Subscriber> {
+      const existing = await this.findForIssuedCard(input.organizationId, input.issuedCardId, input.platform);
+      if (existing) return existing;
+      try {
+        return await this.create(input);
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          const row = await this.findForIssuedCard(input.organizationId, input.issuedCardId, input.platform);
+          if (row) return row;
+        }
+        throw error;
+      }
     },
 
     async findBySerial(serialNumber: string): Promise<Subscriber | null> {
@@ -81,6 +120,79 @@ export function createSubscriberRepository(db: Db) {
         .update(subscribers)
         .set({ status, updatedAt: new Date() })
         .where(eq(subscribers.serialNumber, serialNumber));
+    },
+
+    async listForIssuedCard(organizationId: string, issuedCardId: string): Promise<Subscriber[]> {
+      return db
+        .select()
+        .from(subscribers)
+        .where(
+          and(
+            eq(subscribers.organizationId, organizationId),
+            eq(subscribers.issuedCardId, issuedCardId),
+          ),
+        );
+    },
+
+    async listActiveGoogleForIssuedCard(
+      organizationId: string,
+      issuedCardId: string,
+    ): Promise<Subscriber[]> {
+      return db
+        .select()
+        .from(subscribers)
+        .where(
+          and(
+            eq(subscribers.organizationId, organizationId),
+            eq(subscribers.issuedCardId, issuedCardId),
+            eq(subscribers.platform, "google"),
+            eq(subscribers.status, "active"),
+          ),
+        );
+    },
+
+    async applePushTokensForIssuedCard(
+      organizationId: string,
+      issuedCardId: string,
+    ): Promise<string[]> {
+      const rows = await db
+        .selectDistinct({ pushToken: appleDevices.pushToken })
+        .from(appleRegistrations)
+        .innerJoin(appleDevices, eq(appleDevices.deviceLibraryId, appleRegistrations.deviceLibraryId))
+        .innerJoin(subscribers, eq(subscribers.serialNumber, appleRegistrations.serialNumber))
+        .where(
+          and(
+            eq(subscribers.organizationId, organizationId),
+            eq(subscribers.issuedCardId, issuedCardId),
+            eq(subscribers.status, "active"),
+          ),
+        );
+      return rows.map((row) => row.pushToken);
+    },
+
+    async touchForIssuedCard(organizationId: string, issuedCardId: string): Promise<void> {
+      await db
+        .update(subscribers)
+        .set({ updatedAt: new Date() })
+        .where(
+          and(
+            eq(subscribers.organizationId, organizationId),
+            eq(subscribers.issuedCardId, issuedCardId),
+            eq(subscribers.status, "active"),
+          ),
+        );
+    },
+
+    async revokeForIssuedCard(organizationId: string, issuedCardId: string): Promise<void> {
+      await db
+        .update(subscribers)
+        .set({ status: "removed", updatedAt: new Date() })
+        .where(
+          and(
+            eq(subscribers.organizationId, organizationId),
+            eq(subscribers.issuedCardId, issuedCardId),
+          ),
+        );
     },
 
     // ---- Apple device registrations -------------------------------------

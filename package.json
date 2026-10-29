@@ -21,6 +21,7 @@
     "next": "16.3.6",
     "passkit-generator": "^3.6.1",
     "postgres": "^3.4.9",
+    "qr-scanner": "^1.4.2",
     "qrcode": "^1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",

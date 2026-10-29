@@ -64,6 +64,18 @@ describe("card repository", () => {
     expect(await repo.update(DEFAULT_ORGANIZATION_ID, card.id, input())).toBeNull();
   });
 
+  it("archives without deleting the card or its public data", async () => {
+    const repo = createCardRepository(db);
+    const card = await repo.create(DEFAULT_ORGANIZATION_ID, input());
+    const archived = await repo.archive(DEFAULT_ORGANIZATION_ID, card.id);
+    expect(archived?.archivedAt).toBeInstanceOf(Date);
+    expect(await repo.listWithStats(DEFAULT_ORGANIZATION_ID)).toEqual([]);
+    expect((await repo.listArchived(DEFAULT_ORGANIZATION_ID)).map((row) => row.id)).toEqual([card.id]);
+    expect((await repo.findBySlug("lus-cafe"))?.id).toBe(card.id);
+    await repo.unarchive(DEFAULT_ORGANIZATION_ID, card.id);
+    expect((await repo.listWithStats(DEFAULT_ORGANIZATION_ID)).map((row) => row.id)).toEqual([card.id]);
+  });
+
   it("refuses duplicate slugs", async () => {
     const repo = createCardRepository(db);
     const a = await repo.create(DEFAULT_ORGANIZATION_ID, input());

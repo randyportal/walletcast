@@ -9,6 +9,7 @@ import { contrastRatio, hexToRgba } from "@/lib/cards/design";
 import { faviconIcons } from "@/lib/cards/favicon";
 import { glowSlot, slotHue } from "@/lib/glow/hue";
 import { PublicCardHero } from "@/components/PublicCardHero";
+import { PublicJoinForm } from "@/components/PublicJoinForm";
 
 export async function generateMetadata({ params }: PageProps<"/c/[slug]">): Promise<Metadata> {
   const { slug } = await params;
@@ -42,7 +43,17 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
   const emailMode = !card.askEmail ? "off" : card.emailRequired ? "required" : "optional";
   const heroGlow = card.dayGlow ? slotHue(glowSlot(new Date(), config.glowTimeZone)) : null;
 
-  const addForm = buttons.length > 0 && (
+  const joinForm = card.loyaltyEnabled && !card.archivedAt ? (
+    <section className="panel p-5">
+      <PublicJoinForm
+        slug={card.slug}
+        cardName={card.name}
+        policy={card.joinContactPolicy}
+        joinEnabled={card.loyaltyJoinEnabled}
+      />
+    </section>
+  ) : null;
+  const addForm = buttons.length > 0 && !card.loyaltyEnabled && !card.archivedAt && (
     <form method="post" className="space-y-4">
       {source && <input type="hidden" name="src" value={source} />}
       <div className="text-center">
@@ -130,10 +141,16 @@ export default async function PublicCardPage({ params, searchParams }: PageProps
           compact={minimal}
         />
 
-        {addForm || (
+        {joinForm || addForm || (
           <section className="panel p-5 text-center">
-            <h2 className="text-lg font-bold tracking-tight">Muy pronto podrás agregar esta tarjeta</h2>
-            <p className="mt-1 text-sm text-muted">Estamos terminando de configurar Apple Wallet y Google Wallet para esta tarjeta.</p>
+            <h2 className="text-lg font-bold tracking-tight">
+              {card.archivedAt ? "Esta campaña ya no está disponible" : "Muy pronto podrás agregar esta tarjeta"}
+            </h2>
+            <p className="mt-1 text-sm text-muted">
+              {card.archivedAt
+                ? "Si ya tienes una tarjeta emitida, tu pase sigue funcionando en Wallet."
+                : "Estamos terminando de configurar Apple Wallet y Google Wallet para esta tarjeta."}
+            </p>
           </section>
         )}
 

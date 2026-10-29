@@ -7,6 +7,9 @@ import { createTestDb } from "@/lib/testing/db";
 import { createSelfSignedCert, testAppleConfig } from "@/lib/testing/certs";
 import { createCardRepository } from "@/lib/cards/repository";
 import { createSubscriberRepository } from "@/lib/subscribers/repository";
+import { createCustomerRepository } from "@/lib/customers/repository";
+import { createLoyaltyRepository } from "@/lib/loyalty/repository";
+import { CustomerInputSchema } from "@/lib/customers/validation";
 import { CardInputSchema } from "@/lib/cards/validation";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/organizations/constants";
 import { buildApplePass, latestMessageText } from "./pass";
@@ -170,6 +173,54 @@ describe("buildApplePass", () => {
     const sub = await createSubscriberRepository(db).create({ organizationId: DEFAULT_ORGANIZATION_ID, cardId: card.id, platform: "apple" });
     const entries = zipEntries(await buildApplePass({ card, subscriber: sub, apple, baseUrl: "https://wc.test" }));
     expect(entries).toContain("logo@2x.png");
+  });
+
+  it("renders loyalty stamps, reward and a staff scan QR", async () => {
+    const db = await createTestDb();
+    const cards = createCardRepository(db);
+    const loyalty = createLoyaltyRepository(db);
+    const customers = createCustomerRepository(db);
+    const card = await cards.create(
+      DEFAULT_ORGANIZATION_ID,
+      CardInputSchema.parse({
+        name: "Café Central",
+        organizationName: "Café Central",
+        slug: "cafe-central",
+        loyaltyEnabled: "on",
+        stampsRequired: 3,
+        rewardName: "Café gratis",
+      }),
+    );
+    const customer = await customers.create(
+      DEFAULT_ORGANIZATION_ID,
+      CustomerInputSchema.parse({ name: "Ana", email: "ana@example.com" }),
+    );
+    const { issuedCard } = await loyalty.create({ organizationId: DEFAULT_ORGANIZATION_ID, cardId: card.id, customerId: customer.id });
+    await loyalty.addStamp({ organizationId: DEFAULT_ORGANIZATION_ID, issuedCardId: issuedCard.id, maxStamps: 3 });
+    const passData = await loyalty.getPassData(issuedCard.id);
+    const subscriber = await createSubscriberRepository(db).create({
+      organizationId: DEFAULT_ORGANIZATION_ID,
+      cardId: card.id,
+      issuedCardId: issuedCard.id,
+      platform: "apple",
+    });
+    const pkpass = await buildApplePass({
+      card,
+      subscriber,
+      apple,
+      baseUrl: "https://wc.test",
+      loyalty: passData,
+      timeZone: "America/Mexico_City",
+    });
+    const json = JSON.parse(zipRead(pkpass, "pass.json").toString());
+    expect(json.storeCard.headerFields[0]).toMatchObject({ key: "stamps", label: "SELLOS", value: "1/3" });
+    expect(json.storeCard.secondaryFields).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: "reward", value: "Café gratis" })]),
+    );
+    expect(json.barcodes[0].message).toBe(`https://wc.test/s/${issuedCard.token}`);
+    expect(json.storeCard.backFields).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: "loyalty_history" })]),
+    );
   });
 
   it("falls back to welcome text then a default", () => {

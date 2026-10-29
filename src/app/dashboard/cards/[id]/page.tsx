@@ -11,7 +11,7 @@ import { normalizeContent } from "@/lib/cards/content";
 import { CardForm } from "@/components/CardForm";
 import { SendForm } from "@/components/SendForm";
 import { QrPanel } from "@/components/QrPanel";
-import { deleteCardAction, sendMessageAction, syncGoogleCardAction, updateCardAction } from "@/server/actions";
+import { deleteCardAction, sendMessageAction, syncGoogleCardAction, unarchiveCardAction, updateCardAction } from "@/server/actions";
 import { requireAdmin } from "@/server/auth";
 import { Glyph, UI_ICON_PATHS } from "@/components/icons";
 import Link from "next/link";
@@ -54,6 +54,12 @@ export default async function CardPage({ params, searchParams }: PageProps<"/das
             <p className="mt-2 text-sm text-muted">Diseño, recomendaciones y notificaciones de esta tarjeta.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {card.archivedAt && <span className="badge border-warning/30 text-warning">Archivada</span>}
+            {card.loyaltyEnabled && !card.archivedAt && (
+              <Link href={`/dashboard/cards/${card.id}/issue`} className="btn-primary">
+                <Glyph path={UI_ICON_PATHS.plus} size={15} /> Emitir tarjeta
+              </Link>
+            )}
             <a href={link} target="_blank" className="btn-secondary" rel="noreferrer">
               Abrir página pública <Glyph path={UI_ICON_PATHS.external} size={15} />
             </a>
@@ -151,6 +157,34 @@ export default async function CardPage({ params, searchParams }: PageProps<"/das
         </section>
       </div>
 
+      {card.loyaltyEnabled && (
+        <section className="panel space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Lealtad</p>
+              <h2 className="mt-1 text-lg font-semibold">Tarjeta de sellos</h2>
+            </div>
+            <Link href={`/dashboard/issued-cards?cardId=${card.id}`} className="btn-secondary">
+              Ver tarjetas emitidas
+            </Link>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl bg-surface-2 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted">Sellos</p>
+              <p className="mt-1 text-lg font-bold">{card.stampsRequired}</p>
+            </div>
+            <div className="rounded-xl bg-surface-2 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted">Recompensa</p>
+              <p className="mt-1 text-lg font-bold">{card.rewardName || "Sin definir"}</p>
+            </div>
+            <div className="rounded-xl bg-surface-2 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted">Alta pública</p>
+              <p className="mt-1 text-lg font-bold">{card.loyaltyJoinEnabled ? "Activa" : "Desactivada"}</p>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="space-y-4">
         <div>
           <h2 className="text-xl font-bold tracking-tight">Editor de la tarjeta</h2>
@@ -209,18 +243,34 @@ export default async function CardPage({ params, searchParams }: PageProps<"/das
             publicPageMode: card.publicPageMode,
             askEmail: card.askEmail,
             emailRequired: card.emailRequired,
+            loyaltyEnabled: card.loyaltyEnabled,
+            stampsRequired: card.stampsRequired,
+            rewardName: card.rewardName,
+            loyaltyJoinEnabled: card.loyaltyJoinEnabled,
+            joinContactPolicy: card.joinContactPolicy,
+            notifyOnStamp: card.notifyOnStamp,
+            notifyOnReward: card.notifyOnReward,
+            notifyOnRedeem: card.notifyOnRedeem,
           }}
         />
       </section>
 
       <section className="panel border-danger/40">
-        <h2 className="mb-1 text-lg font-semibold">Eliminar tarjeta</h2>
+        <h2 className="mb-1 text-lg font-semibold">{card.archivedAt ? "Campaña archivada" : "Archivar tarjeta"}</h2>
         <p className="mb-4 text-sm text-muted">
-          Elimina la tarjeta, sus suscriptores y el historial. Los pases que ya están en las carteras dejan de actualizarse.
+          {card.archivedAt
+            ? "Las tarjetas emitidas y los pases siguen funcionando. Puedes reactivarla para volver a permitir altas."
+            : "La tarjeta deja de aparecer en el panel y no acepta altas nuevas. Las tarjetas emitidas y los pases existentes siguen funcionando."}
         </p>
-        <form action={deleteCardAction.bind(null, card.id)}>
-          <button className="btn-danger">Eliminar permanentemente</button>
-        </form>
+        {card.archivedAt ? (
+          <form action={unarchiveCardAction.bind(null, card.id)}>
+            <button className="btn-secondary">Reactivar campaña</button>
+          </form>
+        ) : (
+          <form action={deleteCardAction.bind(null, card.id)}>
+            <button className="btn-danger">Archivar campaña</button>
+          </form>
+        )}
       </section>
     </div>
   );

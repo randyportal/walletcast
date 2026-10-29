@@ -24,6 +24,7 @@ RUN addgroup -S walletcast && adduser -S walletcast -G walletcast \
     && mkdir -p /app/.data && chown walletcast:walletcast /app/.data
 COPY --from=build --chown=walletcast:walletcast /app/.next/standalone ./
 COPY --from=build --chown=walletcast:walletcast /app/.next/static ./.next/static
+COPY --from=build --chown=walletcast:walletcast /app/public ./public
 # Migrations are applied automatically at startup.
 COPY --from=build --chown=walletcast:walletcast /app/src/lib/db/migrations ./src/lib/db/migrations
 USER walletcast

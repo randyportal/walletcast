@@ -1,4 +1,4 @@
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/lib/db/client";
 import { cards, messages, subscribers, type Card, type Message, type NewCard } from "@/lib/db/schema";
 import type { CardInput } from "./validation";
@@ -107,7 +107,7 @@ export function createCardRepository(db: Db) {
       const rows = await db
         .select()
         .from(cards)
-        .where(eq(cards.organizationId, organizationId))
+        .where(and(eq(cards.organizationId, organizationId), isNull(cards.archivedAt)))
         .orderBy(desc(cards.createdAt));
       const counts = await db
         .select({ cardId: subscribers.cardId, platform: subscribers.platform, n: count() })
@@ -119,6 +119,32 @@ export function createCardRepository(db: Db) {
         appleSubscribers: counts.find((c) => c.cardId === card.id && c.platform === "apple")?.n ?? 0,
         googleSubscribers: counts.find((c) => c.cardId === card.id && c.platform === "google")?.n ?? 0,
       }));
+    },
+
+    async archive(organizationId: string, id: string): Promise<Card | null> {
+      const [card] = await db
+        .update(cards)
+        .set({ archivedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(cards.id, id), eq(cards.organizationId, organizationId)))
+        .returning();
+      return card ?? null;
+    },
+
+    async unarchive(organizationId: string, id: string): Promise<Card | null> {
+      const [card] = await db
+        .update(cards)
+        .set({ archivedAt: null, updatedAt: new Date() })
+        .where(and(eq(cards.id, id), eq(cards.organizationId, organizationId)))
+        .returning();
+      return card ?? null;
+    },
+
+    async listArchived(organizationId: string): Promise<Card[]> {
+      return db
+        .select()
+        .from(cards)
+        .where(and(eq(cards.organizationId, organizationId), sql`${cards.archivedAt} is not null`))
+        .orderBy(desc(cards.archivedAt));
     },
 
     async delete(organizationId: string, id: string): Promise<void> {

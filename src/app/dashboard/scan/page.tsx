@@ -1,25 +1,57 @@
 import type { Metadata } from "next";
-import { requireUser } from "@/server/auth";
-import { Glyph, UI_ICON_PATHS } from "@/components/icons";
+import { getServices } from "@/lib/services";
+import { requireLoyaltyOperator } from "@/server/auth";
+import { ScanConsole, type ScanCardData } from "@/components/ScanConsole";
 
 export const metadata: Metadata = { title: "Escanear" };
 
-export default async function ScanPage() {
-  const user = await requireUser();
-  return (
-    <div className="mx-auto max-w-xl space-y-6">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">{user.organizationName}</p>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight">Escanear tarjeta</h1>
-        <p className="mt-2 text-sm text-muted">El escáner de staff se habilitará con el módulo de lealtad.</p>
-      </div>
-      <section className="panel flex flex-col items-center gap-3 py-16 text-center">
-        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10 text-accent">
-          <Glyph path={UI_ICON_PATHS.scan} size={24} />
-        </span>
-        <p className="text-lg font-semibold">Escáner en preparación</p>
-        <p className="max-w-sm text-sm text-muted">Aquí podrás escanear el QR del cliente, registrar compras y canjear recompensas.</p>
-      </section>
-    </div>
-  );
+export default async function ScanPage({ searchParams }: PageProps<"/dashboard/scan">) {
+  const user = await requireLoyaltyOperator();
+  const { card: token } = await searchParams;
+  const { loyalty } = await getServices();
+  const canRevoke = user.organizationRole === "owner" || user.organizationRole === "admin" || user.isPlatformAdmin;
+
+  let data: ScanCardData | null = null;
+  if (typeof token === "string" && token) {
+    const row = await loyalty.findByToken(token, user.organizationId);
+    if (row) {
+      const passData = await loyalty.getPassData(row.issuedCard.id);
+      if (passData) {
+        data = {
+          issuedCard: {
+            id: row.issuedCard.id,
+            token: row.issuedCard.token,
+            stamps: row.issuedCard.stamps,
+            status: row.issuedCard.status,
+            lastVisitAt: row.issuedCard.lastVisitAt.toISOString(),
+          },
+          card: {
+            id: row.card.id,
+            name: row.card.name,
+            slug: row.card.slug,
+            rewardName: row.card.rewardName,
+            stampsRequired: row.card.stampsRequired,
+            accentColor: row.card.accentColor,
+            bgColor: row.card.bgColor,
+            fgColor: row.card.fgColor,
+          },
+          customer: {
+            id: row.customer.id,
+            name: row.customer.name,
+            email: row.customer.email,
+            mobile: row.customer.mobile,
+          },
+          history: passData.transactions.map((tx) => ({
+            id: tx.id,
+            type: tx.type,
+            remarks: tx.remarks,
+            actorName: tx.actorName,
+            createdAt: tx.createdAt.toISOString(),
+          })),
+        };
+      }
+    }
+  }
+
+  return <ScanConsole initialCard={data} canRevoke={canRevoke} />;
 }

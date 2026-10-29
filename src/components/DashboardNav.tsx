@@ -29,14 +29,28 @@ export function DashboardNav({
   const items: Item[] = admin
     ? [
         { href: "/dashboard", label: "Tarjetas", icon: "cards" },
+        { href: "/dashboard/customers", label: "Clientes", icon: "users" },
+        { href: "/dashboard/issued-cards", label: "Emitidas", icon: "wallet" },
+        { href: "/dashboard/scan", label: "Escanear", icon: "scan" },
+        { href: "/dashboard/transactions", label: "Movimientos", icon: "message" },
+        { href: "/dashboard/analytics", label: "Analítica", icon: "star" },
         { href: "/dashboard/send", label: "Enviar", icon: "send" },
         { href: "/dashboard/settings", label: "Ajustes", icon: "settings" },
         { href: "/dashboard/users", label: "Usuarios", icon: "users" },
         ...(isPlatformAdmin ? [{ href: "/dashboard/organizations", label: "Organizaciones", icon: "building" as const }] : []),
       ]
-    : canSend
-      ? [{ href: "/dashboard/send", label: "Enviar", icon: "send" }]
-      : [{ href: "/dashboard/scan", label: "Escanear", icon: "scan" }];
+    : organizationRole === "staff"
+      ? [
+          { href: "/dashboard/scan", label: "Escanear", icon: "scan" },
+          { href: "/dashboard/issued-cards", label: "Emitidas", icon: "wallet" },
+          { href: "/dashboard/customers", label: "Clientes", icon: "users" },
+        ]
+      : canSend
+        ? [
+            { href: "/dashboard/send", label: "Enviar", icon: "send" },
+            { href: "/dashboard/analytics", label: "Analítica", icon: "star" },
+          ]
+        : [{ href: "/dashboard/analytics", label: "Analítica", icon: "star" }];
 
   const isActive = (href: string) =>
     href === "/dashboard"
@@ -61,7 +75,7 @@ export function DashboardNav({
   );
 
   const brand = (
-    <Link href={admin ? "/dashboard" : canSend ? "/dashboard/send" : "/dashboard/scan"} className="flex items-center gap-3">
+    <Link href={admin ? "/dashboard" : organizationRole === "staff" ? "/dashboard/scan" : canSend ? "/dashboard/send" : "/dashboard/analytics"} className="flex items-center gap-3">
       <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-accent text-accent-foreground shadow-sm">
         <Glyph path={UI_ICON_PATHS.wallet} size={20} />
       </span>

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { JOIN_CONTACT_POLICIES } from "@/lib/db/schema";
 import {
   BACKGROUND_POSITIONS,
   BACKGROUND_TYPES,
@@ -87,7 +88,18 @@ export const CardInputSchema = z.object({
   publicPageMode: z.enum(["full", "minimal"]).default("full"),
   askEmail: checkbox(true),
   emailRequired: checkbox(false),
+  loyaltyEnabled: checkbox(false),
+  stampsRequired: z.coerce.number().int().min(3, "Mínimo 3 sellos").max(16, "Máximo 16 sellos").default(10),
+  rewardName: z.string().trim().max(60).default(""),
+  loyaltyJoinEnabled: checkbox(true),
+  joinContactPolicy: z.enum(JOIN_CONTACT_POLICIES).default("optional"),
+  notifyOnStamp: checkbox(false),
+  notifyOnReward: checkbox(true),
+  notifyOnRedeem: checkbox(true),
 }).superRefine((input, ctx) => {
+  if (input.loyaltyEnabled && !input.rewardName) {
+    ctx.addIssue({ code: "custom", path: ["rewardName"], message: "Escribe el nombre de la recompensa" });
+  }
   if ((input.backgroundType === "linear" || input.backgroundType === "radial") && !input.bgColor2) {
     ctx.addIssue({ code: "custom", path: ["bgColor2"], message: "Elige un segundo color para el degradado" });
   }

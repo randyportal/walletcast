@@ -1,12 +1,13 @@
 import { z } from "zod";
 import type { AppConfig } from "@/lib/config/env";
-import type { Card } from "@/lib/db/schema";
+import type { Card, Subscriber } from "@/lib/db/schema";
 import type { SubscriberRepository } from "@/lib/subscribers/repository";
 import type { CardRepository } from "@/lib/cards/repository";
 import { normalizeContent, previousMessages } from "@/lib/cards/content";
 import { buildApplePass } from "@/lib/apple/pass";
 import { createSaveUrl, type GoogleWalletApi } from "@/lib/google/client";
 import { buildGenericClass, buildGenericObject } from "@/lib/google/objects";
+import type { LoyaltyPassData } from "@/lib/loyalty/wallet";
 
 /** Public "add to wallet" form. Email is optional; `src` tracks the QR placement. */
 export const IssueRequestSchema = z.object({
@@ -42,24 +43,30 @@ export async function issueApplePass(
   subscribers: SubscriberRepository,
   card: Card,
   request: IssueRequest,
+  loyalty: LoyaltyPassData | null = null,
+  existingSubscriber?: Subscriber,
+  timeZone = config.glowTimeZone,
 ): Promise<Buffer> {
   if (!config.apple) throw new PlatformDisabledError("Apple Wallet");
   const limit = normalizeContent(card).config.latest.historyLimit + 1;
   const history = previousMessages(await cards.listMessages(card.organizationId, card.id, limit), card.latestMessage);
-  const subscriber = await subscribers.create({
-    organizationId: card.organizationId,
-    cardId: card.id,
-    platform: "apple",
-    email: request.email,
-    source: request.src,
-  });
+  const subscriber =
+    existingSubscriber ??
+    (await subscribers.create({
+      organizationId: card.organizationId,
+      cardId: card.id,
+      platform: "apple",
+      email: request.email,
+      source: request.src,
+    }));
   return buildApplePass({
     card,
     subscriber,
     apple: config.apple,
     baseUrl: config.baseUrl,
     history,
-    timeZone: config.glowTimeZone,
+    timeZone,
+    loyalty,
   });
 }
 
@@ -70,18 +77,31 @@ export async function issueGooglePass(
   api: GoogleWalletApi,
   card: Card,
   request: IssueRequest,
+  loyalty: LoyaltyPassData | null = null,
+  existingSubscriber?: Subscriber,
+  timeZone = config.glowTimeZone,
 ): Promise<string> {
   if (!config.google) throw new PlatformDisabledError("Google Wallet");
   const limit = normalizeContent(card).config.latest.historyLimit + 1;
   const history = previousMessages(await cards.listMessages(card.organizationId, card.id, limit), card.latestMessage);
   await api.upsertGenericClass(buildGenericClass(config.google.issuerId, card));
-  const subscriber = await subscribers.create({
-    organizationId: card.organizationId,
-    cardId: card.id,
-    platform: "google",
-    email: request.email,
-    source: request.src,
-  });
-  const object = buildGenericObject(config.google.issuerId, card, subscriber, config.baseUrl, history);
+  const subscriber =
+    existingSubscriber ??
+    (await subscribers.create({
+      organizationId: card.organizationId,
+      cardId: card.id,
+      platform: "google",
+      email: request.email,
+      source: request.src,
+    }));
+  const object = buildGenericObject(
+    config.google.issuerId,
+    card,
+    subscriber,
+    config.baseUrl,
+    history,
+    loyalty,
+    timeZone,
+  );
   return createSaveUrl(config.google, object, config.baseUrl);
 }

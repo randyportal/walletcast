@@ -14,6 +14,8 @@ import {
   normalizeGoogleConfig,
   type GoogleConfig,
 } from "@/lib/cards/google";
+import { type LoyaltyPassData, loyaltySummary } from "@/lib/loyalty/wallet";
+import { staffScanUrl } from "@/lib/cards/links";
 
 /**
  * Mapping WalletCast cards/subscribers to Google Wallet Generic passes.
@@ -112,12 +114,14 @@ export function buildGenericObject(
   subscriber: Subscriber,
   baseUrl: string,
   history: HistoryMessage[] = [],
+  loyalty: LoyaltyPassData | null = null,
+  timeZone = "America/Mexico_City",
 ) {
   return {
     id: objectId(issuerId, subscriber),
     classId: classId(issuerId, card),
     state: "ACTIVE",
-    ...buildObjectPatch(card, baseUrl, history),
+    ...buildObjectPatch(card, baseUrl, history, loyalty, timeZone),
   };
 }
 
@@ -171,13 +175,30 @@ function recommendationModules(card: Card, baseUrl: string) {
  * Everything that can change after the pass was saved. Used when a card design
  * changes; the caller PUTs this full object so removed fields are cleared.
  */
-export function buildObjectPatch(card: Card, baseUrl: string, history: HistoryMessage[] = []): GoogleObjectPatch {
+export function buildObjectPatch(
+  card: Card,
+  baseUrl: string,
+  history: HistoryMessage[] = [],
+  loyalty: LoyaltyPassData | null = null,
+  timeZone = "America/Mexico_City",
+): GoogleObjectPatch {
   const config = normalizeGoogleConfig(card.googleConfig);
   const hero = cardUsesHero(card);
   const mode = effectiveGoogleCodeMode(card);
   const barcodeCode = mode === "code" ? resolveBarcode(card, baseUrl) : null;
   const textCode = mode === "text" ? config.code.text : "";
   const modules = recommendationModules(card, baseUrl);
+  const summary = loyalty ? loyaltySummary(loyalty, card.stampsRequired, card.rewardName, timeZone) : null;
+  const loyaltyModules: Record<string, unknown>[] = summary
+    ? [
+        { header: localized("Sellos"), body: localized(`${summary.stamps}/${summary.totalStamps}`), sortIndex: 0 },
+        { header: localized("Recompensa"), body: localized(summary.rewardName || "Lealtad"), sortIndex: 1 },
+        { header: localized("Cliente"), body: localized(summary.customerName), sortIndex: 2 },
+        { header: localized("Última visita"), body: localized(summary.lastVisit), sortIndex: 3 },
+        { header: localized("Estado"), body: localized(summary.statusLabel), sortIndex: 4 },
+        ...(summary.history ? [{ header: localized("Historial"), body: localized(summary.history.slice(0, 500)), sortIndex: 5 }] : []),
+      ]
+    : [];
   const imageModule = config.imageModule?.assetId
     ? [
         {
@@ -215,11 +236,13 @@ export function buildObjectPatch(card: Card, baseUrl: string, history: HistoryMe
           },
         }
       : {}),
-    ...(barcodeCode
-      ? { barcode: { type: GOOGLE_BARCODE_TYPES[barcodeCode.format], value: barcodeCode.value } }
-      : textCode
-        ? { barcode: { alternateText: textCode } }
-        : {}),
+    ...(loyalty
+      ? { barcode: { type: "QR_CODE", value: staffScanUrl(baseUrl, loyalty.issuedCard.token) } }
+      : barcodeCode
+        ? { barcode: { type: GOOGLE_BARCODE_TYPES[barcodeCode.format], value: barcodeCode.value } }
+        : textCode
+          ? { barcode: { alternateText: textCode } }
+          : {}),
     ...(config.button
       ? {
           appLinkData: {
@@ -233,7 +256,9 @@ export function buildObjectPatch(card: Card, baseUrl: string, history: HistoryMe
         }
       : {}),
     textModulesData: textModules(card, config, history),
-    ...(modules.length > 0 ? { valueAddedModuleData: modules } : {}),
+    ...(modules.length + loyaltyModules.length > 0
+      ? { valueAddedModuleData: [...loyaltyModules, ...modules] }
+      : {}),
     // Clear the legacy links module so old passes stop showing the default globe icons.
     linksModuleData: { uris: [] },
     ...(imageModule.length > 0 ? { imageModulesData: imageModule } : {}),

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { getServices } from "@/lib/services";
 import { IntegrationBanner } from "@/components/IntegrationBanner";
 import { requireAdmin } from "@/server/auth";
-import { syncAllGoogleAction } from "@/server/actions";
+import { syncAllGoogleAction, unarchiveCardAction } from "@/server/actions";
 import { Glyph, UI_ICON_PATHS } from "@/components/icons";
 
 export const metadata: Metadata = { title: "Tarjetas" };
@@ -12,7 +12,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   const user = await requireAdmin();
   const { config, cards } = await getServices();
   const list = await cards.listWithStats(user.organizationId);
-  const { googleSynced, googleFailed, googleError, googleWarn } = await searchParams;
+  const archivedCards = await cards.listArchived(user.organizationId);
+  const { googleSynced, googleFailed, googleError, googleWarn, archived } = await searchParams;
   const subscribers = list.reduce((sum, card) => sum + card.appleSubscribers + card.googleSubscribers, 0);
   const apple = list.reduce((sum, card) => sum + card.appleSubscribers, 0);
   const google = list.reduce((sum, card) => sum + card.googleSubscribers, 0);
@@ -42,6 +43,11 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
       </header>
 
       <IntegrationBanner config={config} />
+      {archived === "1" && (
+        <p role="status" className="rounded-xl border border-warning/20 bg-warning/10 px-3 py-2 text-sm text-warning">
+          Campaña archivada. Las tarjetas emitidas y sus pases siguen funcionando.
+        </p>
+      )}
       {typeof googleSynced === "string" && (
         <p role="status" className="rounded-xl border border-success/20 bg-success/10 px-3 py-2 text-sm text-success">
           Google actualizado en {googleSynced} tarjeta(s){typeof googleFailed === "string" && googleFailed !== "0" ? `, ${googleFailed} con avisos` : ""}.
@@ -110,6 +116,31 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
               </article>
             );
           })}
+        </section>
+      )}
+
+      {archivedCards.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-lg font-bold tracking-tight">Archivadas</h2>
+            <p className="text-sm text-muted">Sus tarjetas emitidas y pases siguen funcionando.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {archivedCards.map((card) => (
+              <article key={card.id} className="panel flex flex-col gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted">{card.organizationName}</p>
+                  <h3 className="font-bold">{card.name}</h3>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Link href={`/dashboard/cards/${card.id}`} className="btn-secondary px-3 py-1.5 text-xs">Ver</Link>
+                  <form action={unarchiveCardAction.bind(null, card.id)}>
+                    <button className="btn-ghost px-3 py-1.5 text-xs">Reactivar</button>
+                  </form>
+                </div>
+              </article>
+            ))}
+          </div>
         </section>
       )}
     </div>

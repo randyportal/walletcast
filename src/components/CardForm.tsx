@@ -72,6 +72,14 @@ export interface CardFormValues {
   publicPageMode: string;
   askEmail: boolean;
   emailRequired: boolean;
+  loyaltyEnabled: boolean;
+  stampsRequired: number;
+  rewardName: string;
+  loyaltyJoinEnabled: boolean;
+  joinContactPolicy: string;
+  notifyOnStamp: boolean;
+  notifyOnReward: boolean;
+  notifyOnRedeem: boolean;
 }
 
 const DEFAULTS: CardFormValues = {
@@ -115,6 +123,14 @@ const DEFAULTS: CardFormValues = {
   publicPageMode: "full",
   askEmail: true,
   emailRequired: false,
+  loyaltyEnabled: false,
+  stampsRequired: 10,
+  rewardName: "",
+  loyaltyJoinEnabled: true,
+  joinContactPolicy: "email_or_mobile",
+  notifyOnStamp: false,
+  notifyOnReward: true,
+  notifyOnRedeem: true,
 };
 
 const PRESETS: { name: string; patch: Partial<CardFormValues> }[] = [
@@ -211,6 +227,7 @@ const TABS = [
   { id: "google", label: "Google Wallet" },
   { id: "apple", label: "Apple Wallet" },
   { id: "messages", label: "Mensajes" },
+  { id: "loyalty", label: "Lealtad" },
   { id: "public", label: "Página pública" },
   { id: "advanced", label: "Avanzado" },
 ] as const;
@@ -224,6 +241,7 @@ const TAB_ICONS: Record<Tab, keyof typeof UI_ICON_PATHS> = {
   google: "wallet",
   apple: "wallet",
   messages: "send",
+  loyalty: "star",
   public: "public",
   advanced: "settings",
 };
@@ -236,6 +254,7 @@ const TAB_HINTS: Record<Tab, string> = {
   google: "Botón, módulos y detalles del pase",
   apple: "Campos y enlaces del reverso",
   messages: "Último mensaje e historial",
+  loyalty: "Sellos, recompensas y alta de clientes",
   public: "Cómo se ve al agregar la tarjeta",
   advanced: "Brillo por hora del día",
 };
@@ -1110,6 +1129,75 @@ export function CardForm(props: Props) {
               </label>
             </div>
             <p className="field-hint">En la tarjeta principal solo se ve el último mensaje. El historial queda en una sección aparte.</p>
+          </div>
+        </section>
+
+        <section className={sectionClass("loyalty")}>
+          <h2 className="text-lg font-semibold">Lealtad</h2>
+          <div className="mt-4 space-y-4">
+            <input type="hidden" name="loyaltyEnabled" value={values.loyaltyEnabled ? "on" : "off"} />
+            <label className="flex items-start gap-3 text-sm">
+              <input type="checkbox" className="mt-1" checked={values.loyaltyEnabled} onChange={(e) => update({ loyaltyEnabled: e.target.checked })} />
+              <span>
+                <span className="font-medium">Activar tarjeta de sellos</span>
+                <span className="block text-muted">Los clientes podrán registrar visitas y canjear una recompensa. Los pases existentes no cambian hasta emitir una tarjeta.</span>
+              </span>
+            </label>
+            {values.loyaltyEnabled && (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="field-label">Sellos para la recompensa</span>
+                    <input name="stampsRequired" type="number" min={3} max={16} className="input" value={values.stampsRequired} onChange={(e) => update({ stampsRequired: Number(e.target.value) })} />
+                    {err("stampsRequired")}
+                  </label>
+                  <label className="block">
+                    <span className="field-label">Nombre de la recompensa</span>
+                    <input name="rewardName" className="input" maxLength={60} value={values.rewardName} onChange={set("rewardName")} placeholder="Café gratis" />
+                    {err("rewardName")}
+                  </label>
+                </div>
+                <input type="hidden" name="loyaltyJoinEnabled" value={values.loyaltyJoinEnabled ? "on" : "off"} />
+                <label className="flex items-start gap-3 text-sm">
+                  <input type="checkbox" className="mt-1" checked={values.loyaltyJoinEnabled} onChange={(e) => update({ loyaltyJoinEnabled: e.target.checked })} />
+                  <span>
+                    <span className="font-medium">Permitir altas públicas</span>
+                    <span className="block text-muted">El QR de la campaña crea una tarjeta nueva o recupera la existente.</span>
+                  </span>
+                </label>
+                <label className="block">
+                  <span className="field-label">Contacto requerido para el alta</span>
+                  <select name="joinContactPolicy" className="input" value={values.joinContactPolicy} onChange={set("joinContactPolicy")}>
+                    <option value="optional">Solo nombre</option>
+                    <option value="email">Correo obligatorio</option>
+                    <option value="mobile">Móvil obligatorio</option>
+                    <option value="email_or_mobile">Correo o móvil</option>
+                  </select>
+                  <p className="field-hint">Se usa para recuperar la tarjeta y evitar duplicados. Las notificaciones de Wallet no dependen de este dato.</p>
+                </label>
+                <div className="rounded-xl border border-border bg-surface-2 p-4">
+                  <p className="text-sm font-semibold">Notificaciones de Wallet</p>
+                  <p className="mt-1 text-xs text-muted">La actualización del pase es inmediata. Estas opciones solo controlan si además se envía aviso.</p>
+                  <div className="mt-3 space-y-2 text-sm">
+                    <input type="hidden" name="notifyOnStamp" value={values.notifyOnStamp ? "on" : "off"} />
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={values.notifyOnStamp} onChange={(e) => update({ notifyOnStamp: e.target.checked })} />
+                      Al agregar un sello
+                    </label>
+                    <input type="hidden" name="notifyOnReward" value={values.notifyOnReward ? "on" : "off"} />
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={values.notifyOnReward} onChange={(e) => update({ notifyOnReward: e.target.checked })} />
+                      Al completar la recompensa
+                    </label>
+                    <input type="hidden" name="notifyOnRedeem" value={values.notifyOnRedeem ? "on" : "off"} />
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={values.notifyOnRedeem} onChange={(e) => update({ notifyOnRedeem: e.target.checked })} />
+                      Al canjear la recompensa
+                    </label>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </section>
 

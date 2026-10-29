@@ -4,6 +4,8 @@ import type { Card, Subscriber } from "@/lib/db/schema";
 import type { SubscriberRepository } from "@/lib/subscribers/repository";
 import type { CardRepository } from "@/lib/cards/repository";
 import { type HistoryMessage, normalizeContent, previousMessages } from "@/lib/cards/content";
+import type { LoyaltyRepository } from "@/lib/loyalty/repository";
+import type { LoyaltyPassData } from "@/lib/loyalty/wallet";
 
 /**
  * Apple PassKit web service (https://developer.apple.com/documentation/walletpasses/adding-a-web-service-to-update-passes).
@@ -20,7 +22,13 @@ export interface AppleWebServiceDeps {
   apple: AppleConfig;
   subscribers: SubscriberRepository;
   cards: CardRepository;
-  buildPass: (card: Card, subscriber: Subscriber, history: HistoryMessage[]) => Promise<Buffer>;
+  buildPass: (
+    card: Card,
+    subscriber: Subscriber,
+    history: HistoryMessage[],
+    loyalty?: LoyaltyPassData | null,
+  ) => Promise<Buffer>;
+  loyalty?: LoyaltyRepository;
   log?: (message: string) => void;
 }
 
@@ -47,7 +55,7 @@ function toHttpSeconds(date: Date): number {
 }
 
 export function createAppleWebService(deps: AppleWebServiceDeps) {
-  const { apple, subscribers, cards } = deps;
+  const { apple, subscribers, cards, loyalty } = deps;
   const log = deps.log ?? ((m: string) => console.info(`[apple] ${m}`));
 
   async function authorize(passTypeId: string, serial: string, authorization: string | null) {
@@ -131,7 +139,10 @@ export function createAppleWebService(deps: AppleWebServiceDeps) {
       }
       const limit = normalizeContent(card).config.latest.historyLimit + 1;
       const history = previousMessages(await cards.listMessages(card.organizationId, card.id, limit), card.latestMessage);
-      const pass = await deps.buildPass(card, subscriber, history);
+      const loyaltyData = subscriber.issuedCardId && loyalty
+        ? await loyalty.getPassData(subscriber.issuedCardId)
+        : null;
+      const pass = await deps.buildPass(card, subscriber, history, loyaltyData);
       return {
         status: 200,
         body: pass,

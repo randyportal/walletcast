@@ -7,6 +7,16 @@ export function publicCardUrl(baseUrl: string, slug: string, source?: string | n
   return url.toString();
 }
 
+/** Public page for one customer's issued card. */
+export function issuedCardUrl(baseUrl: string, cardSlug: string, token: string): string {
+  return new URL(`/c/${encodeURIComponent(cardSlug)}/${encodeURIComponent(token)}`, baseUrl).toString();
+}
+
+/** Staff scan entry; the token is the only public identifier. */
+export function staffScanUrl(baseUrl: string, token: string): string {
+  return new URL(`/s/${encodeURIComponent(token)}`, baseUrl).toString();
+}
+
 export const SOURCE_PATTERN = /^[\w-]{1,40}$/;
 
 export function normaliseSource(value: string | null | undefined): string | null {

@@ -3,6 +3,7 @@ import { decodeJwt, decodeProtectedHeader, importSPKI, jwtVerify } from "jose";
 import { describe, expect, it } from "vitest";
 import type { GoogleConfig } from "@/lib/config/env";
 import type { Card, Subscriber } from "@/lib/db/schema";
+import type { LoyaltyPassData } from "@/lib/loyalty/wallet";
 import { DEFAULT_GOOGLE_CONFIG } from "@/lib/cards/google";
 import { DEFAULT_CONTENT_CONFIG } from "@/lib/cards/content";
 import { createGoogleWalletApi, createSaveUrl, GoogleWalletError, WALLET_API } from "./client";
@@ -105,6 +106,28 @@ describe("google object mapping", () => {
       value: "https://wc.test/c/lu?src=pass",
     });
     expect(buildObjectPatch({ ...card, barcode: false }, "https://wc.test").barcode).toBeUndefined();
+  });
+
+  it("adds loyalty modules and the staff QR without touching broadcast modules", () => {
+    const loyaltyCard = { ...card, loyaltyEnabled: true, stampsRequired: 3, rewardName: "Café gratis" } as Card;
+    const loyalty: LoyaltyPassData = {
+      issuedCard: {
+        id: "issued-1", organizationId: "org-1", cardId: card.id, customerId: "customer-1",
+        token: "11111111-1111-1111-1111-111111111111", stamps: 2, status: "active",
+        completedAt: null, lastVisitAt: new Date("2026-10-28T17:00:00Z"), revokedAt: null,
+        createdAt: new Date("2026-10-01T00:00:00Z"), updatedAt: new Date("2026-10-28T17:00:00Z"),
+      },
+      customer: {
+        id: "customer-1", organizationId: "org-1", name: "Ana", email: "ana@example.com", mobile: null,
+        status: "active", createdAt: new Date("2026-10-01T00:00:00Z"), updatedAt: new Date("2026-10-01T00:00:00Z"),
+      },
+      transactions: [],
+    };
+    const patch = buildObjectPatch(loyaltyCard, "https://wc.test", [], loyalty, "America/Mexico_City");
+    expect(patch.barcode).toEqual({ type: "QR_CODE", value: "https://wc.test/s/11111111-1111-1111-1111-111111111111" });
+    expect(patch.valueAddedModuleData).toEqual(
+      expect.arrayContaining([expect.objectContaining({ header: { defaultValue: { language: "es", value: "Sellos" } } })]),
+    );
   });
 
   it("builds class, patch and message payloads", () => {

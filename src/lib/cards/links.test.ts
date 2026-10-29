@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { normaliseSource, publicCardUrl, qrPng, qrSvg } from "./links";
+import { issuedCardUrl, normaliseSource, publicCardUrl, qrPng, qrSvg, staffScanUrl } from "./links";
 
 describe("card links", () => {
   it("builds the public url with an optional source tag", () => {
     expect(publicCardUrl("https://wc.test", "lu")).toBe("https://wc.test/c/lu");
     expect(publicCardUrl("https://wc.test", "lu", "window")).toBe("https://wc.test/c/lu?src=window");
+  });
+
+  it("builds issued card and staff scan urls", () => {
+    expect(issuedCardUrl("https://wc.test", "lu", "token-1")).toBe("https://wc.test/c/lu/token-1");
+    expect(staffScanUrl("https://wc.test", "token-1")).toBe("https://wc.test/s/token-1");
   });
 
   it("normalises sources", () => {

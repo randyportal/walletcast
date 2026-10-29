@@ -5,6 +5,8 @@ import { createAssetRepository, type AssetRepository } from "@/lib/cards/assets"
 import { createSubscriberRepository, type SubscriberRepository } from "@/lib/subscribers/repository";
 import { createUserRepository, type UserRepository } from "@/lib/users/repository";
 import { createOrganizationRepository, type OrganizationRepository } from "@/lib/organizations/repository";
+import { createCustomerRepository, type CustomerRepository } from "@/lib/customers/repository";
+import { createLoyaltyRepository, type LoyaltyRepository } from "@/lib/loyalty/repository";
 import { buildApplePass } from "@/lib/apple/pass";
 import { createApnsSender, type ApnsSender } from "@/lib/apple/apns";
 import { createAppleWebService, type AppleWebService } from "@/lib/apple/webservice";
@@ -19,6 +21,8 @@ export interface Services {
   assets: AssetRepository;
   users: UserRepository;
   organizations: OrganizationRepository;
+  customers: CustomerRepository;
+  loyalty: LoyaltyRepository;
   apns: ApnsSender | null;
   googleApi: GoogleWalletApi | null;
   appleWebService: AppleWebService | null;
@@ -35,6 +39,8 @@ async function build(): Promise<Services> {
   const assets = createAssetRepository(db);
   const users = createUserRepository(db);
   const organizations = createOrganizationRepository(db);
+  const customers = createCustomerRepository(db);
+  const loyalty = createLoyaltyRepository(db);
   const apple = config.apple;
   return {
     config,
@@ -44,6 +50,8 @@ async function build(): Promise<Services> {
     assets,
     users,
     organizations,
+    customers,
+    loyalty,
     apns: apple ? createApnsSender(apple) : null,
     googleApi: config.google ? createGoogleWalletApi(config.google) : null,
     appleWebService: apple
@@ -51,7 +59,19 @@ async function build(): Promise<Services> {
           apple,
           cards,
           subscribers,
-          buildPass: (card, subscriber, history) => buildApplePass({ card, subscriber, apple, baseUrl: config.baseUrl, history, timeZone: config.glowTimeZone }),
+          loyalty,
+          buildPass: async (card, subscriber, history, loyaltyData) => {
+            const org = await organizations.findById(card.organizationId);
+            return buildApplePass({
+              card,
+              subscriber,
+              apple,
+              baseUrl: config.baseUrl,
+              history,
+              timeZone: org?.timeZone ?? config.glowTimeZone,
+              loyalty: loyaltyData,
+            });
+          },
           log: (line) => console.info(`[apple-wallet] ${line}`),
         })
       : null,

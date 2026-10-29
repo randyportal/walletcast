@@ -48,7 +48,7 @@ const DUMMY_HASH =
 
 function safeNext(value: FormDataEntryValue | null): string {
   const next = typeof value === "string" ? value : "";
-  const allowed = next.startsWith("/dashboard") || next.startsWith("/invite/");
+  const allowed = next.startsWith("/dashboard") || next.startsWith("/invite/") || next.startsWith("/s/");
   return allowed && !next.startsWith("//") ? next : "/dashboard";
 }
 
@@ -536,9 +536,19 @@ export async function syncAllGoogleAction(): Promise<void> {
 export async function deleteCardAction(cardId: string): Promise<void> {
   const user = await requireAdmin();
   const { cards } = await getServices();
-  await cards.delete(user.organizationId, cardId);
+  await cards.archive(user.organizationId, cardId);
   revalidatePath("/dashboard");
-  redirect("/dashboard");
+  revalidatePath(`/dashboard/cards/${cardId}`);
+  redirect("/dashboard?archived=1");
+}
+
+export async function unarchiveCardAction(cardId: string): Promise<void> {
+  const user = await requireAdmin();
+  const { cards } = await getServices();
+  await cards.unarchive(user.organizationId, cardId);
+  revalidatePath("/dashboard");
+  revalidatePath(`/dashboard/cards/${cardId}`);
+  redirect(`/dashboard/cards/${cardId}`);
 }
 
 export async function sendMessageAction(cardId: string, _prev: FormState, formData: FormData): Promise<FormState> {

@@ -13,6 +13,8 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/passes/
   const { config, cards, subscribers } = await getServices();
   const card = await cards.findBySlug(slug);
   if (!card) return jsonError(404, "Tarjeta no encontrada");
+  if (card.archivedAt) return jsonError(410, "Esta campaña está archivada.");
+  if (card.loyaltyEnabled) return jsonError(400, "Esta tarjeta requiere un alta de lealtad.");
 
   const parsed = IssueRequestSchema.safeParse(await readFields(request));
   if (!parsed.success) return publicError(request, slug, 400, "Correo electrónico inválido");

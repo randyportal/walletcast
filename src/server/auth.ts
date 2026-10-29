@@ -102,3 +102,33 @@ export async function requirePlatformAdmin(): Promise<CurrentUser> {
 export function canManageCards(user: CurrentUser): boolean {
   return user.organizationRole === "owner" || user.organizationRole === "admin" || user.isPlatformAdmin;
 }
+
+
+export function canOperateLoyalty(user: CurrentUser): boolean {
+  return (
+    user.organizationRole === "owner" ||
+    user.organizationRole === "admin" ||
+    user.organizationRole === "staff" ||
+    user.isPlatformAdmin
+  );
+}
+
+export function canEditCustomers(user: CurrentUser): boolean {
+  return user.organizationRole === "owner" || user.organizationRole === "admin" || user.isPlatformAdmin;
+}
+
+/** Call at the top of counter/loyalty operations: stamping, redeeming, issuing. */
+export async function requireLoyaltyOperator(): Promise<CurrentUser> {
+  const user = await loadCurrentUser();
+  if (!user) redirect("/login");
+  if (canOperateLoyalty(user)) return user;
+  redirect(user.organizationRole === "marketing" ? "/dashboard/send" : "/dashboard/analytics");
+}
+
+/** Call at the top of customer create/edit screens. Staff may read customers but not edit them. */
+export async function requireCustomerEditor(): Promise<CurrentUser> {
+  const user = await loadCurrentUser();
+  if (!user) redirect("/login");
+  if (canEditCustomers(user)) return user;
+  redirect("/dashboard/customers");
+}
